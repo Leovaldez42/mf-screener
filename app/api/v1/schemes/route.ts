@@ -16,9 +16,14 @@ export async function GET(req: NextRequest) {
   const maxSharpe = sp.get("maxSharpe");
   const minExpense = sp.get("minExpense");
   const maxExpense = sp.get("maxExpense");
+  const minCagr1y = sp.get("minCagr1y");
+  const maxCagr1y = sp.get("maxCagr1y");
   const minCagr3y = sp.get("minCagr3y");
   const maxCagr3y = sp.get("maxCagr3y");
+  const minCagrInception = sp.get("minCagrInception");
+  const maxCagrInception = sp.get("maxCagrInception");
   const minAum = sp.get("minAum");
+  const maxAum = sp.get("maxAum");
   const sort = (sp.get("sort") || "sharpe_3y") as SortKey;
   const order = sp.get("order") === "asc" ? true : false;
   const limit = Math.min(500, Math.max(1, Number(sp.get("limit") || "150")));
@@ -42,9 +47,14 @@ export async function GET(req: NextRequest) {
   if (maxSharpe) query = query.lte("sharpe_3y", Number(maxSharpe));
   if (minExpense) query = query.gte("expense_ratio", Number(minExpense));
   if (maxExpense) query = query.lte("expense_ratio", Number(maxExpense));
+  if (minCagr1y) query = query.gte("cagr_1y", Number(minCagr1y));
+  if (maxCagr1y) query = query.lte("cagr_1y", Number(maxCagr1y));
   if (minCagr3y) query = query.gte("cagr_3y", Number(minCagr3y));
   if (maxCagr3y) query = query.lte("cagr_3y", Number(maxCagr3y));
+  if (minCagrInception) query = query.gte("cagr_inception", Number(minCagrInception));
+  if (maxCagrInception) query = query.lte("cagr_inception", Number(maxCagrInception));
   if (minAum) query = query.gte("aum_cr", Number(minAum));
+  if (maxAum) query = query.lte("aum_cr", Number(maxAum));
 
   const sortKey = SORTABLE.includes(sort) ? sort : "sharpe_3y";
   query = query.order(sortKey, { ascending: order, nullsFirst: false }).limit(limit);

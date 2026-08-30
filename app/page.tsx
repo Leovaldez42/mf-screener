@@ -40,6 +40,30 @@ export default function ChasePage() {
     [rows]
   );
 
+  const summary = useMemo(() => {
+    const biggestInflows = [...rows]
+      .filter((r) => r.net_value_delta_cr > 0)
+      .sort((a, b) => b.net_value_delta_cr - a.net_value_delta_cr);
+
+    const biggestOutflows = [...rows]
+      .filter((r) => r.net_value_delta_cr < 0)
+      .sort((a, b) => a.net_value_delta_cr - b.net_value_delta_cr);
+
+    const sectorTotals = new Map<string, number>();
+    rows.forEach((r) => {
+      const key = r.sector || "Unassigned";
+      sectorTotals.set(key, (sectorTotals.get(key) ?? 0) + r.net_value_delta_cr);
+    });
+
+    const leadingSector = [...sectorTotals.entries()].sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))[0];
+
+    return {
+      inflow: biggestInflows[0] ?? null,
+      outflow: biggestOutflows[0] ?? null,
+      leadingSector: leadingSector ? { name: leadingSector[0], value: leadingSector[1] } : null,
+    };
+  }, [rows]);
+
   function toggle(id: string) {
     const next = watch.includes(id) ? watch.filter((x) => x !== id) : [...watch, id];
     setWatch(next);
@@ -57,6 +81,43 @@ export default function ChasePage() {
         </p>
       </div>
       {error ? <p className="text-sm text-amber-400">{error}</p> : null}
+
+      {rows.length > 0 ? (
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="rounded border border-zinc-800 bg-zinc-900/60 p-3">
+            <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Biggest inflow</div>
+            <div className="mt-2 text-base font-medium text-zinc-100">
+              {summary.inflow ? summary.inflow.display_name : "—"}
+            </div>
+            <div className="mt-1 text-sm text-emerald-400">
+              {summary.inflow ? `+${formatNumber(summary.inflow.net_value_delta_cr, 1)} ₹ cr` : "No positive movers"}
+            </div>
+          </div>
+
+          <div className="rounded border border-zinc-800 bg-zinc-900/60 p-3">
+            <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Biggest outflow</div>
+            <div className="mt-2 text-base font-medium text-zinc-100">
+              {summary.outflow ? summary.outflow.display_name : "—"}
+            </div>
+            <div className="mt-1 text-sm text-rose-400">
+              {summary.outflow ? `${formatNumber(summary.outflow.net_value_delta_cr, 1)} ₹ cr` : "No negative movers"}
+            </div>
+          </div>
+
+          <div className="rounded border border-zinc-800 bg-zinc-900/60 p-3">
+            <div className="text-xs uppercase tracking-[0.12em] text-zinc-500">Sector signal</div>
+            <div className="mt-2 text-base font-medium text-zinc-100">
+              {summary.leadingSector ? summary.leadingSector.name : "—"}
+            </div>
+            <div className="mt-1 text-sm text-zinc-300">
+              {summary.leadingSector
+                ? `${summary.leadingSector.value > 0 ? "Net inflow" : "Net outflow"}: ${formatNumber(Math.abs(summary.leadingSector.value), 1)} ₹ cr`
+                : "No sector signal"}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap gap-3 text-sm">
         <label className="flex items-center gap-2">
           Sector
