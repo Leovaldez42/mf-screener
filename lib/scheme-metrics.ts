@@ -96,11 +96,14 @@ export function rowFromFinapi(raw: Record<string, unknown>): SchemeMetric | null
 export const COMPARE_MAX = 6;
 
 export const SORTABLE = [
+  "sharpe_1y",
   "sharpe_3y",
+  "sharpe_5y",
   "expense_ratio",
   "cagr_1y",
   "cagr_3y",
   "cagr_5y",
+  "cagr_inception",
   "aum_cr",
   "name",
   "fund_house",
