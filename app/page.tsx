@@ -5,6 +5,8 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Delta, LoadingWait, loadWatchlist, saveWatchlist } from "@/components/ui";
 import { formatMonthSpan, formatNumber } from "@/lib/format";
+import { loadMonths } from "@/lib/load-months";
+import { sessionCacheGet, sessionCacheSet } from "@/lib/session-cache";
 import type { ChaseRow } from "@/lib/types";
 
 type SortKey = "display_name" | "sector" | "fund_count" | "net_qty_delta" | "net_value_delta_cr" | "median_weight_pct";
@@ -28,7 +30,7 @@ function sortValue(row: ChaseRow, key: SortKey): string | number {
 export default function ChasePage() {
   const search = useSearchParams();
   const month = search.get("month") || "";
-  const [rows, setRows] = useState<ChaseRow[]>([]);
+  const [allRows, setAllRows] = useState<ChaseRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [sector, setSector] = useState("");
   const [minFunds, setMinFunds] = useState("0");
@@ -40,18 +42,23 @@ export default function ChasePage() {
 
   useEffect(() => setWatch(loadWatchlist()), []);
   useEffect(() => {
-    fetch("/api/v1/months", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => setMonths(d.months || []))
+    loadMonths()
+      .then(setMonths)
       .catch(() => setMonths([]));
   }, []);
 
   useEffect(() => {
     let cancelled = false;
+    const key = `chase:${month || "_"}`;
+    const hit = sessionCacheGet<ChaseRow[]>(key);
+    if (hit) {
+      setAllRows(hit);
+      setError(null);
+      setLoading(false);
+      return;
+    }
     const q = new URLSearchParams();
     if (month) q.set("month", month);
-    if (sector) q.set("sector", sector);
-    if (minFunds !== "0") q.set("min_funds", minFunds);
     setLoading(true);
     fetch(`/api/v1/chase?${q}`)
       .then(async (r) => {
@@ -59,7 +66,9 @@ export default function ChasePage() {
         if (cancelled) return;
         if (!r.ok && r.status !== 503) setError(d.error || "Failed to load");
         else setError(null);
-        setRows(d.rows || []);
+        const next = (d.rows || []) as ChaseRow[];
+        setAllRows(next);
+        if (r.ok) sessionCacheSet(key, next);
       })
       .catch(() => {
         if (!cancelled) setError("Failed to load");
@@ -70,11 +79,20 @@ export default function ChasePage() {
     return () => {
       cancelled = true;
     };
-  }, [month, sector, minFunds]);
+  }, [month]);
+
+  const rows = useMemo(() => {
+    const min = Number(minFunds) || 0;
+    return allRows.filter((r) => {
+      if (sector && (r.sector || "").toLowerCase() !== sector.toLowerCase()) return false;
+      if (min > 0 && r.fund_count < min) return false;
+      return true;
+    });
+  }, [allRows, sector, minFunds]);
 
   const sectors = useMemo(
-    () => [...new Set(rows.map((r) => r.sector).filter(Boolean))] as string[],
-    [rows]
+    () => [...new Set(allRows.map((r) => r.sector).filter(Boolean))] as string[],
+    [allRows]
   );
 
   const sortedRows = useMemo(() => {
@@ -205,11 +223,13 @@ export default function ChasePage() {
       </div>
       {loading ? (
         <LoadingWait label="Loading holdings…" />
-      ) : rows.length === 0 ? (
+      ) : allRows.length === 0 ? (
         <p className="text-sm text-faint">
           No rows. Apply the SQL migration in Supabase, set <code>.env.local</code>, then run{" "}
           <code>npm run ingest</code>.
         </p>
+      ) : rows.length === 0 ? (
+        <p className="text-sm text-faint">No stocks match these filters.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">

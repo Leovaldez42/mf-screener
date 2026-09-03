@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Delta, LoadingWait, loadWatchlist, saveWatchlist } from "@/components/ui";
 import { formatMonthLabel, formatNumber } from "@/lib/format";
+import { sessionCacheGet, sessionCacheSet } from "@/lib/session-cache";
 
 type Payload = {
   stock?: { display_name: string; sector: string | null };
@@ -32,10 +33,19 @@ export default function StockPage() {
   useEffect(() => setWatch(loadWatchlist()), []);
 
   useEffect(() => {
+    const key = `stock:${id}:${month || "_"}`;
+    const hit = sessionCacheGet<Payload>(key);
+    if (hit) {
+      setData(hit);
+      return;
+    }
     const q = month ? `?month=${month}` : "";
     fetch(`/api/v1/stocks/${id}${q}`)
       .then((r) => r.json())
-      .then(setData);
+      .then((d: Payload) => {
+        setData(d);
+        if (!d.error) sessionCacheSet(key, d);
+      });
   }, [id, month]);
 
   function toggle() {

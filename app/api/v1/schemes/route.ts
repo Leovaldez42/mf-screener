@@ -1,16 +1,19 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { getScreenerUniverse } from "@/lib/cached-metrics";
 import { CATEGORY_STYLES, categoryStyleOrFilter } from "@/lib/equity";
+import { METRICS_CACHE_CONTROL, jsonCached, jsonNoStore } from "@/lib/http-cache";
 import {
   equalWeightCategoryAverages,
   SORTABLE,
-  type SchemeMetric,
   type SortKey,
 } from "@/lib/scheme-metrics";
 import { createAnonClient, supabaseConfigured } from "@/lib/supabase";
 
+export const revalidate = 120;
+
 export async function GET(req: NextRequest) {
   if (!supabaseConfigured()) {
-    return NextResponse.json({ error: "supabase_not_configured" }, { status: 503 });
+    return jsonNoStore({ error: "supabase_not_configured" }, 503);
   }
   const sp = req.nextUrl.searchParams;
   const q = (sp.get("q") || "").replace(/[%(),]/g, "").trim().slice(0, 80);
@@ -65,24 +68,18 @@ export async function GET(req: NextRequest) {
   query = query.order(sortKey, { ascending: order, nullsFirst: false }).limit(limit);
 
   const { data, error } = await query;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return jsonNoStore({ error: error.message }, 500);
 
-  const { data: peerRows, error: peerErr } = await db
-    .from("scheme_metrics")
-    .select("*")
-    .eq("is_direct", true)
-    .eq("is_growth", true)
-    .eq("is_active_equity", true)
-    .limit(2000);
-  if (peerErr) return NextResponse.json({ error: peerErr.message }, { status: 500 });
-
-  const peers = (peerRows || []) as SchemeMetric[];
-  const categoryAverages = equalWeightCategoryAverages(peers);
-  const houses = [...new Set(peers.map((r) => String(r.fund_house)).filter(Boolean))].sort();
+  let universe;
+  try {
+    universe = await getScreenerUniverse();
+  } catch (e) {
+    return jsonNoStore({ error: e instanceof Error ? e.message : "schemes_failed" }, 500);
+  }
 
   let styleAverage = null;
   if (needles.length) {
-    const stylePeers = peers.filter((r) => {
+    const stylePeers = universe.peers.filter((r) => {
       const c = (r.category || "").toLowerCase();
       return needles.some((n) => c.includes(n));
     });
@@ -94,20 +91,16 @@ export async function GET(req: NextRequest) {
       : null;
   }
 
-  const { count } = await db
-    .from("scheme_metrics")
-    .select("scheme_code", { count: "exact", head: true })
-    .eq("is_direct", true)
-    .eq("is_growth", true)
-    .eq("is_active_equity", true);
-
-  return NextResponse.json({
-    schemes: data || [],
-    houses,
-    styles: CATEGORY_STYLES.map((s) => ({ id: s.id, label: s.label })),
-    categoryAverages,
-    styleAverage,
-    total: (data || []).length,
-    universe: count ?? peers.length,
-  });
+  return jsonCached(
+    {
+      schemes: data || [],
+      houses: universe.houses,
+      styles: CATEGORY_STYLES.map((s) => ({ id: s.id, label: s.label })),
+      categoryAverages: universe.categoryAverages,
+      styleAverage,
+      total: (data || []).length,
+      universe: universe.universe,
+    },
+    METRICS_CACHE_CONTROL,
+  );
 }

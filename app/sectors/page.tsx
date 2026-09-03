@@ -3,6 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Delta, LoadingWait } from "@/components/ui";
+import { sessionCacheGet, sessionCacheSet } from "@/lib/session-cache";
 
 type Row = { sector: string; net_value_delta_cr: number; net_qty_delta: number };
 
@@ -15,6 +16,14 @@ export default function SectorsPage() {
 
   useEffect(() => {
     let cancelled = false;
+    const key = `sectors:${month || "_"}`;
+    const hit = sessionCacheGet<Row[]>(key);
+    if (hit) {
+      setRows(hit);
+      setError(null);
+      setLoading(false);
+      return;
+    }
     const q = month ? `?month=${month}` : "";
     setLoading(true);
     fetch(`/api/v1/sectors${q}`)
@@ -23,7 +32,9 @@ export default function SectorsPage() {
         if (cancelled) return;
         if (!r.ok && r.status !== 503) setError(d.error || "Could not load sectors");
         else setError(null);
-        setRows(d.rows || []);
+        const next = (d.rows || []) as Row[];
+        setRows(next);
+        if (r.ok) sessionCacheSet(key, next);
       })
       .catch(() => {
         if (!cancelled) setError("Could not load sectors");
