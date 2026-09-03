@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import { Delta, loadWatchlist, saveWatchlist } from "@/components/ui";
+import { Delta, LoadingWait, loadWatchlist, saveWatchlist } from "@/components/ui";
 import type { ChaseRow } from "@/lib/types";
 
 function WatchlistInner() {
@@ -53,7 +53,7 @@ function WatchlistInner() {
       </div>
       {error ? <p className="text-sm text-amber-400">{error}</p> : null}
       {ids === null ? (
-        <p className="text-sm text-faint">Loading…</p>
+        <LoadingWait label="Loading watchlist…" />
       ) : ids.length === 0 ? (
         <p className="text-sm text-faint">
           Empty. Open{" "}
@@ -63,7 +63,7 @@ function WatchlistInner() {
           and tap Watch on a stock.
         </p>
       ) : rows.length === 0 && !loaded ? (
-        <p className="text-sm text-faint">Loading…</p>
+        <LoadingWait label="Loading watchlist…" />
       ) : rows.length === 0 ? (
         <p className="text-sm text-faint">Saved names could not be loaded for this month.</p>
       ) : (

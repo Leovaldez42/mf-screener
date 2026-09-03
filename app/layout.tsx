@@ -23,6 +23,10 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: "MF Chase",
   description: "Holdings chase plus fund screener and compare for Indian active-equity MFs.",
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/apple-icon.png" }],
+  },
 };
 
 export default function RootLayout({
