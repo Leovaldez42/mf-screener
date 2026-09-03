@@ -11,6 +11,7 @@ const ROWS: { key: keyof SchemeMetric; label: string; digits?: number }[] = [
   { key: "fund_house", label: "Fund house" },
   { key: "category", label: "Category" },
   { key: "expense_ratio", label: "Expense ratio %", digits: 2 },
+  { key: "pe", label: "PE", digits: 2 },
   { key: "sharpe_1y", label: "Sharpe 1Y", digits: 2 },
   { key: "sharpe_3y", label: "Sharpe 3Y", digits: 2 },
   { key: "sharpe_5y", label: "Sharpe 5Y", digits: 2 },

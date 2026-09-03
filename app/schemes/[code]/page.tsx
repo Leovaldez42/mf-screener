@@ -30,6 +30,7 @@ export default function SchemePage() {
 
   const stats: { label: string; key: keyof SchemeMetric; invert?: boolean; digits: number }[] = [
     { label: "Expense ratio %", key: "expense_ratio", invert: true, digits: 2 },
+    { label: "PE", key: "pe", invert: true, digits: 2 },
     { label: "Sharpe 1Y", key: "sharpe_1y", digits: 2 },
     { label: "Sharpe 3Y", key: "sharpe_3y", digits: 2 },
     { label: "Sharpe 5Y", key: "sharpe_5y", digits: 2 },

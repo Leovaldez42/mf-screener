@@ -7,7 +7,7 @@ Not a Groww/Value Research clone. Not investment advice.
 ## What v1 does
 
 - **Chase:** monthly books — what funds added or cut (share quantity), crowding, sector rollups
-- **Screener / Compare:** Direct Growth active-equity schemes, filter by fund house, Sharpe, expense ratio, returns
+- **Screener / Compare:** Direct Growth active-equity schemes, filter by fund house, Sharpe, PE, expense ratio, returns
 - Holdings ingest uses **FinAPI Pro** (server-side only): all Direct Growth active-equity schemes in `scheme_metrics`, monthly books
 - Screener / Compare metrics also from FinAPI
 - Localhost web UI + JSON at `/api/v1` (for a future mobile app)
@@ -18,9 +18,10 @@ Holdings land about **ten working days after month-end**. Metrics refresh can ru
 ## Setup
 
 1. Create a [Supabase](https://supabase.com) project.
-2. Run both SQL files in the editor, in order:
+2. Run the SQL files in the editor, in order:
    - [`supabase/migrations/20260829000000_init.sql`](supabase/migrations/20260829000000_init.sql)
    - [`supabase/migrations/20260829010000_scheme_metrics.sql`](supabase/migrations/20260829010000_scheme_metrics.sql)
+   - [`supabase/migrations/20260903000000_scheme_metrics_pe.sql`](supabase/migrations/20260903000000_scheme_metrics_pe.sql) (adds `pe`; existing projects only need this file)
 3. Copy [`.env.example`](.env.example) to `.env.local` and fill keys (including `FINAPI_API_KEY` for metrics).
 4. Install and run:
 
@@ -32,7 +33,7 @@ npm run ingest           # FinAPI → holdings for every screener scheme, 12 mon
 npm run dev              # http://localhost:3000
 ```
 
-Open **Screener**, filter by category / house / Sharpe / TER / returns. When a category is selected, a single equal-weight peer average strip appears at the top. Open a scheme page for the same averages vs that fund. Compare from **Compare**. Watchlist is browser-local. The browser never calls FinAPI.
+Open **Screener**, filter by category / house / Sharpe / PE / TER / returns. When a category is selected, a single equal-weight peer average strip appears at the top. Open a scheme page for the same averages vs that fund (including PE). Compare from **Compare**. Watchlist is browser-local. The browser never calls FinAPI.
 
 Ingest status for operators is at `/data` (not in the nav).
 

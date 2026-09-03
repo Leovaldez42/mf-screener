@@ -21,15 +21,11 @@ export async function GET(req: NextRequest) {
   const category = (sp.get("category") || "").trim();
   const style = (sp.get("style") || "").trim();
   const minSharpe = sp.get("minSharpe");
-  const maxSharpe = sp.get("maxSharpe");
-  const minExpense = sp.get("minExpense");
   const maxExpense = sp.get("maxExpense");
+  const maxPe = sp.get("maxPe");
   const minCagr1y = sp.get("minCagr1y");
-  const maxCagr1y = sp.get("maxCagr1y");
   const minCagr3y = sp.get("minCagr3y");
-  const maxCagr3y = sp.get("maxCagr3y");
   const minCagrInception = sp.get("minCagrInception");
-  const maxCagrInception = sp.get("maxCagrInception");
   const minAum = sp.get("minAum");
   const maxAum = sp.get("maxAum");
   const sort = (sp.get("sort") || "sharpe_3y") as SortKey;
@@ -52,15 +48,11 @@ export async function GET(req: NextRequest) {
   } else if (category) query = query.ilike("category", `%${category}%`);
   if (q) query = query.or(`name.ilike.%${q}%,fund_house.ilike.%${q}%`);
   if (minSharpe) query = query.gte("sharpe_3y", Number(minSharpe));
-  if (maxSharpe) query = query.lte("sharpe_3y", Number(maxSharpe));
-  if (minExpense) query = query.gte("expense_ratio", Number(minExpense));
   if (maxExpense) query = query.lte("expense_ratio", Number(maxExpense));
+  if (maxPe) query = query.lte("pe", Number(maxPe));
   if (minCagr1y) query = query.gte("cagr_1y", Number(minCagr1y));
-  if (maxCagr1y) query = query.lte("cagr_1y", Number(maxCagr1y));
   if (minCagr3y) query = query.gte("cagr_3y", Number(minCagr3y));
-  if (maxCagr3y) query = query.lte("cagr_3y", Number(maxCagr3y));
   if (minCagrInception) query = query.gte("cagr_inception", Number(minCagrInception));
-  if (maxCagrInception) query = query.lte("cagr_inception", Number(maxCagrInception));
   if (minAum) query = query.gte("aum_cr", Number(minAum));
   if (maxAum) query = query.lte("aum_cr", Number(maxAum));
 

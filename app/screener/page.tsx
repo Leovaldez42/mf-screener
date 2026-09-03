@@ -9,16 +9,15 @@ import { formatNumber } from "@/lib/format";
 const TABLE_COLUMNS = [
   { key: "name", label: "Scheme", hide: "" },
   { key: "sharpe_3y", label: "Sharpe 3Y", hide: "" },
+  { key: "pe", label: "PE", hide: "hidden sm:table-cell" },
   { key: "expense_ratio", label: "TER %", hide: "" },
   { key: "cagr_1y", label: "CAGR 1Y", hide: "hidden sm:table-cell" },
   { key: "cagr_3y", label: "CAGR 3Y", hide: "" },
   { key: "cagr_inception", label: "CAGR inception", hide: "hidden lg:table-cell" },
   { key: "aum_cr", label: "AUM ₹ cr", hide: "hidden sm:table-cell" },
-  { key: "fund_house", label: "House", hide: "hidden md:table-cell" },
-  { key: "category", label: "Category", hide: "hidden lg:table-cell" },
 ] as const;
 
-type NumericCol = "sharpe_3y" | "expense_ratio" | "cagr_1y" | "cagr_3y" | "cagr_inception" | "aum_cr";
+type NumericCol = "sharpe_3y" | "pe" | "expense_ratio" | "cagr_1y" | "cagr_3y" | "cagr_inception" | "aum_cr";
 
 export default function ScreenerPage() {
   const [schemes, setSchemes] = useState<SchemeMetric[]>([]);
@@ -33,15 +32,11 @@ export default function ScreenerPage() {
   const [style, setStyle] = useState("");
   const [house, setHouse] = useState("");
   const [minSharpe, setMinSharpe] = useState("");
-  const [maxSharpe, setMaxSharpe] = useState("");
-  const [minExpense, setMinExpense] = useState("");
   const [maxExpense, setMaxExpense] = useState("");
+  const [maxPe, setMaxPe] = useState("");
   const [minCagr1y, setMinCagr1y] = useState("");
-  const [maxCagr1y, setMaxCagr1y] = useState("");
   const [minCagr3y, setMinCagr3y] = useState("");
-  const [maxCagr3y, setMaxCagr3y] = useState("");
   const [minCagrInception, setMinCagrInception] = useState("");
-  const [maxCagrInception, setMaxCagrInception] = useState("");
   const [minAum, setMinAum] = useState("");
   const [maxAum, setMaxAum] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("sharpe_3y");
@@ -53,15 +48,11 @@ export default function ScreenerPage() {
     if (house) p.set("house", house);
     if (style) p.set("style", style);
     if (minSharpe) p.set("minSharpe", minSharpe);
-    if (maxSharpe) p.set("maxSharpe", maxSharpe);
-    if (minExpense) p.set("minExpense", minExpense);
     if (maxExpense) p.set("maxExpense", maxExpense);
+    if (maxPe) p.set("maxPe", maxPe);
     if (minCagr1y) p.set("minCagr1y", minCagr1y);
-    if (maxCagr1y) p.set("maxCagr1y", maxCagr1y);
     if (minCagr3y) p.set("minCagr3y", minCagr3y);
-    if (maxCagr3y) p.set("maxCagr3y", maxCagr3y);
     if (minCagrInception) p.set("minCagrInception", minCagrInception);
-    if (maxCagrInception) p.set("maxCagrInception", maxCagrInception);
     if (minAum) p.set("minAum", minAum);
     if (maxAum) p.set("maxAum", maxAum);
     p.set("sort", sortKey);
@@ -73,15 +64,11 @@ export default function ScreenerPage() {
     house,
     style,
     minSharpe,
-    maxSharpe,
-    minExpense,
     maxExpense,
+    maxPe,
     minCagr1y,
-    maxCagr1y,
     minCagr3y,
-    maxCagr3y,
     minCagrInception,
-    maxCagrInception,
     minAum,
     maxAum,
     sortKey,
@@ -128,8 +115,6 @@ export default function ScreenerPage() {
         </Link>
       );
     }
-    if (key === "fund_house") return s.fund_house;
-    if (key === "category") return <span className="text-xs">{s.category}</span>;
     if (key === "aum_cr") return formatNumber(s.aum_cr, 0);
     return formatNumber(s[key as NumericCol]);
   }
@@ -184,20 +169,16 @@ export default function ScreenerPage() {
         <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.14em] text-faint">Risk / return</div>
         <div className="grid grid-cols-2 gap-2">
           <NumField label="Min Sharpe" value={minSharpe} onChange={setMinSharpe} placeholder="0.5" />
-          <NumField label="Max Sharpe" value={maxSharpe} onChange={setMaxSharpe} placeholder="1.5" />
           <NumField label="Min 1Y CAGR" value={minCagr1y} onChange={setMinCagr1y} placeholder="8" />
-          <NumField label="Max 1Y CAGR" value={maxCagr1y} onChange={setMaxCagr1y} placeholder="20" />
           <NumField label="Min 3Y CAGR" value={minCagr3y} onChange={setMinCagr3y} placeholder="12" />
-          <NumField label="Max 3Y CAGR" value={maxCagr3y} onChange={setMaxCagr3y} placeholder="25" />
-          <NumField label="Min inception CAGR" value={minCagrInception} onChange={setMinCagrInception} placeholder="10" className="col-span-2" />
-          <NumField label="Max inception CAGR" value={maxCagrInception} onChange={setMaxCagrInception} placeholder="18" className="col-span-2" />
+          <NumField label="Min inception CAGR" value={minCagrInception} onChange={setMinCagrInception} placeholder="10" />
         </div>
       </div>
       <div>
         <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.14em] text-faint">Cost / scale</div>
         <div className="grid grid-cols-2 gap-2">
-          <NumField label="Min TER" value={minExpense} onChange={setMinExpense} placeholder="0.4" />
           <NumField label="Max TER" value={maxExpense} onChange={setMaxExpense} placeholder="1.0" />
+          <NumField label="Max PE" value={maxPe} onChange={setMaxPe} placeholder="30" />
           <NumField label="Min AUM" value={minAum} onChange={setMinAum} placeholder="500" numeric />
           <NumField label="Max AUM" value={maxAum} onChange={setMaxAum} placeholder="50000" numeric />
         </div>
@@ -254,6 +235,7 @@ export default function ScreenerPage() {
               </div>
               <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
                 <span>Sharpe 3Y {formatNumber(strip.sharpe_3y)}</span>
+                <span>PE {formatNumber(strip.pe)}</span>
                 <span>TER {formatNumber(strip.expense_ratio)}%</span>
                 <span>CAGR 3Y {formatNumber(strip.cagr_3y)}%</span>
                 <span>CAGR 1Y {formatNumber(strip.cagr_1y)}%</span>
@@ -262,20 +244,23 @@ export default function ScreenerPage() {
           ) : null}
 
           <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-            <table className="w-full text-left text-sm">
+            <table className="w-full text-sm">
               <thead className="text-faint">
                 <tr>
                   {TABLE_COLUMNS.map((column) => {
                     const isActive = sortKey === column.key;
                     const arrow = isActive ? (sortOrder === "desc" ? "↓" : "↑") : "↕";
+                    const isName = column.key === "name";
                     return (
                       <th
                         key={column.key}
-                        className={`py-2 pr-3 font-normal ${column.hide} ${column.key === "name" ? "sticky left-0 z-10 bg-background" : ""}`}
+                        className={`py-2 pr-3 font-normal ${column.hide} ${
+                          isName ? "sticky left-0 z-10 bg-background text-left" : "text-center"
+                        }`}
                       >
                         <button
                           type="button"
-                          className="inline-flex items-center gap-1 hover:text-foreground"
+                          className={`inline-flex items-center gap-1 hover:text-foreground ${isName ? "" : "justify-center"}`}
                           onClick={() => onSort(column.key as SortKey)}
                         >
                           {column.label}
@@ -289,16 +274,19 @@ export default function ScreenerPage() {
               <tbody>
                 {schemes.map((s) => (
                   <tr key={s.scheme_code} className="border-t border-border align-top">
-                    {TABLE_COLUMNS.map((column) => (
-                      <td
-                        key={`${s.scheme_code}-${column.key}`}
-                        className={`py-2 pr-3 align-top ${column.hide} ${
-                          column.key === "name" ? "sticky left-0 z-10 bg-background" : "text-muted"
-                        }`}
-                      >
-                        {cell(s, column.key)}
-                      </td>
-                    ))}
+                    {TABLE_COLUMNS.map((column) => {
+                      const isName = column.key === "name";
+                      return (
+                        <td
+                          key={`${s.scheme_code}-${column.key}`}
+                          className={`py-2 pr-3 align-top ${column.hide} ${
+                            isName ? "sticky left-0 z-10 bg-background text-left" : "text-center text-muted"
+                          }`}
+                        >
+                          {cell(s, column.key)}
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))}
               </tbody>
