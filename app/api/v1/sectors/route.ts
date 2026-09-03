@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAnonClient, supabaseConfigured } from "@/lib/supabase";
+import { listCompleteMonths } from "@/lib/holdings-month";
+import { createAnonClient, fetchAllRows, supabaseConfigured } from "@/lib/supabase";
 import { asOne } from "@/lib/rel";
 
 export async function GET(req: NextRequest) {
@@ -9,23 +10,19 @@ export async function GET(req: NextRequest) {
   const month = req.nextUrl.searchParams.get("month");
   const db = createAnonClient();
 
-  let monthToUse = month;
-  if (!monthToUse) {
-    const { data: latest } = await db
-      .from("stock_month_aggregates")
-      .select("month")
-      .order("month", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    monthToUse = latest?.month ?? null;
-  }
+  const complete = await listCompleteMonths(db);
+  const monthToUse = month && complete.includes(month) ? month : complete[0] ?? null;
   if (!monthToUse) return NextResponse.json({ month: null, rows: [] });
 
-  const { data, error } = await db
-    .from("holding_diffs")
-    .select("value_delta_cr, qty_delta, stocks(sector)")
-    .eq("month", monthToUse);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  type DiffRow = { value_delta_cr: number; qty_delta: number; stocks: unknown };
+  let data: DiffRow[];
+  try {
+    data = await fetchAllRows<DiffRow>(() =>
+      db.from("holding_diffs").select("value_delta_cr, qty_delta, stocks(sector)").eq("month", monthToUse),
+    );
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : "sectors_failed" }, { status: 500 });
+  }
 
   const map = new Map<string, { net_value_delta_cr: number; net_qty_delta: number }>();
   for (const row of data || []) {

@@ -96,33 +96,33 @@ function CompareInner() {
     <div className="space-y-4">
       <div>
         <h1 className="text-xl font-medium">Compare funds</h1>
-        <p className="text-sm text-zinc-400">
-          Search and add up to {COMPARE_MAX} Direct Growth schemes. You can also tick rows on the{" "}
+        <p className="text-sm text-muted">
+          Search and add up to {COMPARE_MAX} Direct Growth schemes. Open a fund from the{" "}
           <Link className="underline" href="/screener">
             screener
-          </Link>
-          .
+          </Link>{" "}
+          for category averages.
         </p>
       </div>
 
       <div className="relative max-w-xl">
         <input
-          className="w-full rounded border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm"
+          className="w-full rounded border border-border bg-input px-3 py-2 text-sm"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Type a fund name or AMC…"
         />
         {hits.length > 0 ? (
-          <ul className="absolute z-10 mt-1 max-h-64 w-full overflow-auto rounded border border-zinc-700 bg-zinc-900 text-sm">
+          <ul className="absolute z-10 mt-1 max-h-64 w-full overflow-auto rounded border border-border bg-input text-sm">
             {hits.map((h) => (
               <li key={h.scheme_code}>
                 <button
                   type="button"
-                  className="w-full px-3 py-2 text-left hover:bg-zinc-800"
+                  className="w-full px-3 py-2 text-left hover:bg-surface"
                   onClick={() => add(h.scheme_code)}
                 >
                   <div>{h.name}</div>
-                  <div className="text-xs text-zinc-500">
+                  <div className="text-xs text-faint">
                     {h.fund_house} · {h.category}
                   </div>
                 </button>
@@ -138,7 +138,7 @@ function CompareInner() {
             <button
               key={s.scheme_code}
               type="button"
-              className="rounded border border-zinc-700 px-2 py-1 text-xs text-zinc-300 hover:border-zinc-500"
+              className="rounded border border-border px-2 py-1 text-xs text-muted hover:border-faint"
               onClick={() => remove(s.scheme_code)}
             >
               {s.name} ×
@@ -150,7 +150,7 @@ function CompareInner() {
               <button
                 key={c}
                 type="button"
-                className="rounded border border-zinc-800 px-2 py-1 text-xs text-zinc-500"
+                className="rounded border border-border px-2 py-1 text-xs text-faint"
                 onClick={() => remove(c)}
               >
                 {c} ×
@@ -161,37 +161,56 @@ function CompareInner() {
 
       {error ? <p className="text-sm text-amber-400">{error}</p> : null}
       {codes.length < 2 && !error ? (
-        <p className="text-sm text-zinc-500">Add at least two funds above to see the table.</p>
+        <p className="text-sm text-faint">Add at least two funds above to see the table.</p>
       ) : null}
       {schemes.length >= 2 ? (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-left text-sm">
-            <thead className="text-zinc-500">
-              <tr>
-                <th className="py-2 pr-3 font-normal w-40">Metric</th>
-                {schemes.map((s) => (
-                  <th key={s.scheme_code} className="py-2 pr-3 font-normal align-bottom">
-                    <Link className="text-zinc-100 hover:underline" href={`/schemes/${s.scheme_code}`}>
-                      {s.name}
-                    </Link>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {ROWS.map((row) => (
-                <tr key={row.key} className="border-t border-zinc-800">
-                  <td className="py-2 pr-3 text-zinc-400">{row.label}</td>
+        <>
+          <div className="space-y-3 md:hidden">
+            {schemes.map((s) => (
+              <div key={s.scheme_code} className="rounded border border-border p-3">
+                <Link className="font-medium hover:underline" href={`/schemes/${s.scheme_code}`}>
+                  {s.name}
+                </Link>
+                <dl className="mt-2 space-y-1 text-sm">
+                  {ROWS.map((row) => (
+                    <div key={row.key} className="flex justify-between gap-3">
+                      <dt className="text-faint">{row.label}</dt>
+                      <dd>{cell(s, row.key, row.digits)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full text-left text-sm">
+              <thead className="text-faint">
+                <tr>
+                  <th className="sticky left-0 z-10 bg-background py-2 pr-3 font-normal w-40">Metric</th>
                   {schemes.map((s) => (
-                    <td key={s.scheme_code} className="py-2 pr-3">
-                      {cell(s, row.key, row.digits)}
-                    </td>
+                    <th key={s.scheme_code} className="py-2 pr-3 font-normal align-bottom">
+                      <Link className="text-foreground hover:underline" href={`/schemes/${s.scheme_code}`}>
+                        {s.name}
+                      </Link>
+                    </th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {ROWS.map((row) => (
+                  <tr key={row.key} className="border-t border-border">
+                    <td className="sticky left-0 z-10 bg-background py-2 pr-3 text-muted">{row.label}</td>
+                    {schemes.map((s) => (
+                      <td key={s.scheme_code} className="py-2 pr-3">
+                        {cell(s, row.key, row.digits)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       ) : null}
     </div>
   );
@@ -199,7 +218,7 @@ function CompareInner() {
 
 export default function ComparePage() {
   return (
-    <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
+    <Suspense fallback={<p className="text-sm text-faint">Loading…</p>}>
       <CompareInner />
     </Suspense>
   );

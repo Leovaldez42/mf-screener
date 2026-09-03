@@ -21,10 +21,15 @@ export default function SectorsPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-medium">Sectors</h1>
-      <p className="text-sm text-zinc-400">Net quantity and rupee change across active equity books for the month.</p>
+      <p className="text-sm text-muted">
+        Net qty is the sum of share changes. Net ₹ cr is the change in disclosed market value, which
+        includes price moves. Selling shares of a name that rose, or selling cheap shares and adding
+        fewer expensive ones in the same sector, can show qty down and rupees up. Share counts are
+        not comparable across stocks.
+      </p>
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
-          <thead className="text-zinc-500">
+          <thead className="text-faint">
             <tr>
               <th className="py-2 pr-3 font-normal">Sector</th>
               <th className="py-2 pr-3 font-normal">Net qty</th>
@@ -33,7 +38,7 @@ export default function SectorsPage() {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.sector} className="border-t border-zinc-800">
+              <tr key={r.sector} className="border-t border-border">
                 <td className="py-2 pr-3">{r.sector}</td>
                 <td className="py-2 pr-3">
                   <Delta value={r.net_qty_delta} />

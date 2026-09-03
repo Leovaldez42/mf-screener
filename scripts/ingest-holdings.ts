@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import { normalizeNameKey, slugifyAmc } from "../lib/equity";
-import { createServiceClient } from "../lib/supabase";
+import { createServiceClient, fetchAllRows } from "../lib/supabase";
 import type { HoldingEvent } from "../lib/types";
 
 function loadEnv() {
@@ -27,10 +27,16 @@ loadEnv();
 
 const BASE = (process.env.FINAPI_BASE || "https://finapi.upvaly.com").replace(/\/$/, "");
 const KEY = process.env.FINAPI_API_KEY;
-const LIMIT = Number(process.env.INGEST_HOLDINGS_LIMIT || "50");
+const LIMIT = Number(process.env.INGEST_HOLDINGS_LIMIT || "0");
 const MONTHS = Math.min(24, Math.max(2, Number(process.env.INGEST_HOLDINGS_MONTHS || "12")));
 const DELAY_MS = Number(process.env.INGEST_HOLDINGS_DELAY_MS || "250");
 const FETCH_TIMEOUT_MS = Number(process.env.INGEST_HOLDINGS_TIMEOUT_MS || "60000");
+const SKIP_EXISTING = process.env.INGEST_HOLDINGS_SKIP_EXISTING !== "0";
+const AGG_ONLY = process.env.INGEST_HOLDINGS_AGG_ONLY === "1";
+const CODE_FILTER = (process.env.INGEST_HOLDINGS_CODES || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
@@ -45,8 +51,10 @@ function parseNum(v: unknown): number {
 
 function lastCompletedYyyyMm(): string {
   const d = new Date();
+  // AMC books land ~10 working days after month-end. Before the 15th, last month is still incomplete.
+  const shift = d.getDate() < 15 ? 2 : 1;
   d.setDate(1);
-  d.setMonth(d.getMonth() - 1);
+  d.setMonth(d.getMonth() - shift);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
@@ -123,6 +131,68 @@ function median(values: number[]): number | null {
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
 
+function mergeQtyValueWeight(
+  a: { qty: number; value: number; weight: number },
+  b: { qty: number; value: number; weight: number },
+) {
+  const qty = a.qty + b.qty;
+  const value = a.value + b.value;
+  const weight =
+    value > 0 ? (a.weight * a.value + b.weight * b.value) / value : Math.max(a.weight, b.weight);
+  return { qty, value, weight };
+}
+
+type SnapshotInsert = {
+  family_id: number;
+  month: string;
+  stock_id: string;
+  quantity: number;
+  market_value_cr: number;
+  weight_pct: number;
+};
+
+type DiffInsert = {
+  family_id: number;
+  month: string;
+  stock_id: string;
+  qty_delta: number;
+  weight_delta: number;
+  value_delta_cr: number;
+  event: HoldingEvent;
+};
+
+function collapseSnapshots(rows: SnapshotInsert[]): SnapshotInsert[] {
+  const map = new Map<string, SnapshotInsert>();
+  for (const row of rows) {
+    const key = `${row.family_id}|${row.month}|${row.stock_id}`;
+    const prev = map.get(key);
+    if (!prev) {
+      map.set(key, { ...row });
+      continue;
+    }
+    const merged = mergeQtyValueWeight(
+      { qty: prev.quantity, value: prev.market_value_cr, weight: prev.weight_pct },
+      { qty: row.quantity, value: row.market_value_cr, weight: row.weight_pct },
+    );
+    map.set(key, {
+      ...prev,
+      quantity: merged.qty,
+      market_value_cr: merged.value,
+      weight_pct: merged.weight,
+    });
+  }
+  return [...map.values()];
+}
+
+function collapseDiffs(rows: DiffInsert[]): DiffInsert[] {
+  const map = new Map<string, DiffInsert>();
+  for (const row of rows) {
+    const key = `${row.family_id}|${row.month}|${row.stock_id}`;
+    if (!map.has(key)) map.set(key, { ...row });
+  }
+  return [...map.values()];
+}
+
 function errText(e: unknown): string {
   if (e instanceof Error && e.message) return e.message;
   try {
@@ -180,6 +250,15 @@ async function main() {
   }
 
   const db = createServiceClient();
+  await db
+    .from("ingest_runs")
+    .update({
+      finished_at: new Date().toISOString(),
+      status: "failed",
+      notes: "Marked failed: superseded by a new ingest run",
+    })
+    .eq("status", "running");
+
   const end = toYyyyMm(process.env.INGEST_HOLDINGS_END_MONTH || lastCompletedYyyyMm());
   let months = monthWindow(end, MONTHS);
   while (months.length > 1 && inclusiveMonthCount(months[months.length - 1], months[0]) > 23) {
@@ -201,7 +280,9 @@ async function main() {
 
   let familiesOk = 0;
   let familiesFail = 0;
-  const notes: string[] = [`window=${toFinMonth(start)}..${toFinMonth(end)} limit=${LIMIT}`];
+  const notes: string[] = [
+    `window=${toFinMonth(start)}..${toFinMonth(end)} ${CODE_FILTER.length ? `codes=${CODE_FILTER.join(",")}` : LIMIT > 0 ? `limit=${LIMIT}` : "all-schemes"} skip_existing=${SKIP_EXISTING}`,
+  ];
 
   const stockCache = new Map<string, StockRow>();
 
@@ -257,25 +338,60 @@ async function main() {
   }
 
   try {
-    const { data: schemes, error: sErr } = await db
-      .from("scheme_metrics")
-      .select("scheme_code,name,fund_house,amc_slug,category,aum_cr")
-      .eq("is_direct", true)
-      .eq("is_growth", true)
-      .eq("is_active_equity", true)
-      .order("aum_cr", { ascending: false })
-      .limit(LIMIT);
-    if (sErr) throw sErr;
-    if (!schemes?.length) {
+    const schemes: {
+      scheme_code: string;
+      name: string;
+      fund_house: string;
+      amc_slug: string;
+      category: string;
+      aum_cr: number | null;
+    }[] = [];
+    const page = 1000;
+    if (!AGG_ONLY) {
+    if (CODE_FILTER.length) {
+      const { data, error: sErr } = await db
+        .from("scheme_metrics")
+        .select("scheme_code,name,fund_house,amc_slug,category,aum_cr")
+        .eq("is_direct", true)
+        .eq("is_growth", true)
+        .eq("is_active_equity", true)
+        .in("scheme_code", CODE_FILTER);
+      if (sErr) throw sErr;
+      schemes.push(...((data || []) as typeof schemes));
+    } else {
+      for (let from = 0; from < 20000; from += page) {
+        const { data, error: sErr } = await db
+          .from("scheme_metrics")
+          .select("scheme_code,name,fund_house,amc_slug,category,aum_cr")
+          .eq("is_direct", true)
+          .eq("is_growth", true)
+          .eq("is_active_equity", true)
+          .order("aum_cr", { ascending: false })
+          .range(from, from + page - 1);
+        if (sErr) throw sErr;
+        if (!data?.length) break;
+        schemes.push(...(data as typeof schemes));
+        if (data.length < page) break;
+        if (LIMIT > 0 && schemes.length >= LIMIT) break;
+      }
+      if (LIMIT > 0 && schemes.length > LIMIT) schemes.length = LIMIT;
+    }
+    }
+    if (!AGG_ONLY && !schemes?.length) {
       throw new Error("No scheme_metrics rows. Run npm run ingest:metrics first.");
     }
 
-    notes.push(`schemes=${schemes.length}`);
-    console.log(
-      `holdings ingest ${schemes.length} funds, ${months.length} months ${start} → ${end} in ${chunks.length} FinAPI chunk(s)`,
-    );
+    if (AGG_ONLY) {
+      notes.push("agg_only=1 (no FinAPI fetch)");
+      console.log(`rebuild aggregates only, months ${start} → ${end}`);
+    } else {
+      notes.push(`schemes=${schemes.length}`);
+      console.log(
+        `holdings ingest ${schemes.length} funds, ${months.length} months ${start} → ${end} in ${chunks.length} FinAPI chunk(s)`,
+      );
+    }
 
-    for (const scheme of schemes) {
+    for (const scheme of AGG_ONLY ? [] : schemes) {
       const code = String(scheme.scheme_code);
       const familyId = Number(code);
       if (!Number.isFinite(familyId)) {
@@ -285,6 +401,18 @@ async function main() {
       }
 
       try {
+        if (SKIP_EXISTING && !CODE_FILTER.length) {
+          const { count } = await db
+            .from("holdings_snapshots")
+            .select("stock_id", { count: "exact", head: true })
+            .eq("family_id", familyId);
+          if (count && count > 0) {
+            familiesOk += 1;
+            console.log(`skip existing ${code} ${scheme.name} snaps=${count}`);
+            continue;
+          }
+        }
+
         const amcName = String(scheme.fund_house || "unknown");
         const slug = scheme.amc_slug || slugifyAmc(amcName) || "unknown";
         await db.from("amcs").upsert({ slug, name: amcName });
@@ -343,7 +471,9 @@ async function main() {
             const valueLakhs = parseNum(h.marketValue);
             const value = valueLakhs / 100;
             const weight = parseNum(h.weightage);
-            map.set(stockId, { qty, value, weight });
+            const incoming = { qty, value, weight };
+            const prev = map.get(stockId);
+            map.set(stockId, prev ? mergeQtyValueWeight(prev, incoming) : incoming);
             rowsToInsert.push({
               family_id: familyId,
               month,
@@ -354,12 +484,21 @@ async function main() {
             });
           }
 
-          if (rowsToInsert.length) {
-            const { error } = await db.from("holdings_snapshots").upsert(rowsToInsert);
+          const uniqueRows = collapseSnapshots(rowsToInsert);
+          if (uniqueRows.length) {
+            const { error } = await db.from("holdings_snapshots").upsert(uniqueRows, {
+              onConflict: "family_id,month,stock_id",
+            });
             if (error) throw error;
           }
           snapshots[month] = map;
         }
+
+        const latestWithBooks = months.find((m) => (snapshots[m]?.size || 0) > 0) || null;
+        await db
+          .from("families")
+          .update({ has_holdings: Boolean(latestWithBooks), latest_month: latestWithBooks })
+          .eq("id", familyId);
 
         const diffs: {
           family_id: number;
@@ -376,6 +515,8 @@ async function main() {
           const prev = months[i + 1];
           const curMap = snapshots[month] || new Map();
           const prevMap = snapshots[prev] || new Map();
+          // Missing disclosure ≠ mass exit. Skip diffs when this month has no book.
+          if (!curMap.size) continue;
           const ids = new Set([...curMap.keys(), ...prevMap.keys()]);
           for (const stockId of ids) {
             const cur = curMap.get(stockId);
@@ -394,8 +535,11 @@ async function main() {
           }
         }
 
-        if (diffs.length) {
-          const { error } = await db.from("holding_diffs").upsert(diffs);
+        const uniqueDiffs = collapseDiffs(diffs);
+        if (uniqueDiffs.length) {
+          const { error } = await db.from("holding_diffs").upsert(uniqueDiffs, {
+            onConflict: "family_id,month,stock_id",
+          });
           if (error) throw error;
         }
 
@@ -412,23 +556,29 @@ async function main() {
 
     for (const month of months.slice(0, -1)) {
       const prev = previousMonth(month);
-      const { data: diffs, error: dErr } = await db
-        .from("holding_diffs")
-        .select("stock_id, qty_delta, value_delta_cr")
-        .eq("month", month);
-      if (dErr) throw dErr;
-
-      const { data: snaps, error: sErr } = await db
+      const { count: snapCount, error: cErr } = await db
         .from("holdings_snapshots")
-        .select("stock_id, weight_pct, family_id")
+        .select("stock_id", { count: "exact", head: true })
         .eq("month", month);
-      if (sErr) throw sErr;
+      if (cErr) throw cErr;
+      if (!snapCount) {
+        await db.from("holding_diffs").delete().eq("month", month);
+        await db.from("stock_month_aggregates").delete().eq("month", month);
+        notes.push(`skip empty month ${month} (no snapshots; not a mass exit)`);
+        continue;
+      }
 
-      const { data: prevSnaps, error: pErr } = await db
-        .from("holdings_snapshots")
-        .select("stock_id, family_id")
-        .eq("month", prev);
-      if (pErr) throw pErr;
+      const diffs = await fetchAllRows<{ stock_id: string; qty_delta: number; value_delta_cr: number }>(() =>
+        db.from("holding_diffs").select("stock_id, qty_delta, value_delta_cr").eq("month", month),
+      );
+      const snaps = await fetchAllRows<{ stock_id: string; weight_pct: number; family_id: number }>(() =>
+        db.from("holdings_snapshots").select("stock_id, weight_pct, family_id").eq("month", month),
+      );
+      const prevSnaps = await fetchAllRows<{ stock_id: string; family_id: number }>(() =>
+        db.from("holdings_snapshots").select("stock_id, family_id").eq("month", prev),
+      );
+      notes.push(`agg ${month} snaps=${snaps.length} diffs=${diffs.length}`);
+      console.log(`agg ${month} snaps=${snaps.length} diffs=${diffs.length}`);
 
       const weights = new Map<string, number[]>();
       const fundCount = new Map<string, Set<number>>();
@@ -470,12 +620,20 @@ async function main() {
       });
 
       if (agg.length) {
-        const { error } = await db.from("stock_month_aggregates").upsert(agg);
-        if (error) throw error;
+        for (let i = 0; i < agg.length; i += 500) {
+          const { error } = await db.from("stock_month_aggregates").upsert(agg.slice(i, i + 500));
+          if (error) throw error;
+        }
       }
     }
 
-    const status = familiesFail && familiesOk ? "partial" : familiesOk ? "ok" : "failed";
+    const status = AGG_ONLY
+      ? "ok"
+      : familiesFail && familiesOk
+        ? "partial"
+        : familiesOk
+          ? "ok"
+          : "failed";
     await db
       .from("ingest_runs")
       .update({
