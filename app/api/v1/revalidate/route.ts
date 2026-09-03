@@ -29,6 +29,6 @@ export async function POST(req: NextRequest) {
         ? [CACHE_TAG_METRICS]
         : [CACHE_TAG_HOLDINGS, CACHE_TAG_METRICS];
 
-  for (const tag of tags) revalidateTag(tag);
+  for (const tag of tags) revalidateTag(tag, { expire: 0 });
   return jsonCached({ revalidated: tags }, "no-store, max-age=0");
 }

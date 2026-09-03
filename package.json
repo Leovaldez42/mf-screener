@@ -4,8 +4,8 @@
   "private": false,
   "license": "CC-BY-NC-SA-4.0",
   "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
+    "dev": "next dev",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "ingest": "tsx scripts/ingest-holdings.ts",
@@ -17,18 +17,18 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
-    "next": "15.5.24",
-    "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "next": "16.3.4",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
     "eslint": "^9",
-    "eslint-config-next": "15.5.24",
+    "eslint-config-next": "16.3.4",
     "tailwindcss": "^4",
     "tsx": "^4.20.5",
     "typescript": "^5"
