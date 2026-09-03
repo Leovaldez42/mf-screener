@@ -2,13 +2,15 @@
   "name": "mf-chase",
   "version": "0.1.0",
   "private": false,
-  "license": "MIT",
+  "license": "CC-BY-NC-SA-4.0",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "eslint",
     "ingest": "tsx scripts/ingest-holdings.ts",
+    "ingest:aggregates": "INGEST_HOLDINGS_AGG_ONLY=1 tsx scripts/ingest-holdings.ts",
+    "ingest:holdings:codes": "tsx scripts/ingest-holdings.ts",
     "ingest:metrics": "tsx scripts/ingest-metrics.ts",
     "ingest:mfdata": "tsx scripts/ingest.ts",
     "probe:finapi": "tsx scripts/probe-finapi.ts"
