@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ThemeToggle } from "@/components/theme";
 import { formatMonthLabel } from "@/lib/format";
+import { loadMonths } from "@/lib/load-months";
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -15,9 +16,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const month = search.get("month") || months[0] || "";
 
   useEffect(() => {
-    fetch("/api/v1/months", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => setMonths(d.months || []))
+    loadMonths()
+      .then(setMonths)
       .catch(() => setMonths([]));
   }, []);
 

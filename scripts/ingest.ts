@@ -2,6 +2,7 @@ import { readFileSync } from "fs";
 import { resolve } from "path";
 import { isActiveEquityCategory, normalizeNameKey, slugifyAmc } from "../lib/equity";
 import { createServiceClient } from "../lib/supabase";
+import { notifyRevalidate } from "../lib/notify-revalidate";
 import type { HoldingEvent, MfdataFamily, MfdataHolding } from "../lib/types";
 
 function loadEnv() {
@@ -391,6 +392,7 @@ async function main() {
       .eq("id", runId);
 
     process.stdout.write(`done status=${status} ok=${familiesOk} fail=${familiesFail}\n`);
+    if (status !== "failed") await notifyRevalidate("holdings");
   } catch (err) {
     await db
       .from("ingest_runs")

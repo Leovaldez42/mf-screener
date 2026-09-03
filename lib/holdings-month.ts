@@ -1,9 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { unstable_cache } from "next/cache";
+import { CACHE_TAG_HOLDINGS, HOLDINGS_REVALIDATE_SEC } from "@/lib/http-cache";
+import { createAnonClient } from "@/lib/supabase";
 
 const LOOKBACK_MONTHS = 24;
-const CACHE_MS = 60_000;
-
-let cache: { at: number; months: string[] } | null = null;
 
 export function previousMonth(month: string): string {
   const [y, m] = month.split("-").map(Number);
@@ -30,10 +30,8 @@ function monthLookback(end: string, count: number): string[] {
   return out;
 }
 
-/** Months that have actual holdings books, not phantom “all sold” diffs from a missing disclosure. */
-export async function listCompleteMonths(db: SupabaseClient): Promise<string[]> {
-  if (cache && Date.now() - cache.at < CACHE_MS) return cache.months;
-
+async function queryCompleteMonths(): Promise<string[]> {
+  const db = createAnonClient();
   const candidates = monthLookback(lastCompletedYyyyMm(), LOOKBACK_MONTHS);
   const counts = await Promise.all(
     candidates.map(async (month) => {
@@ -45,10 +43,17 @@ export async function listCompleteMonths(db: SupabaseClient): Promise<string[]> 
       return { month, count: count ?? 0 };
     }),
   );
+  return counts.filter((row) => row.count > 0).map((row) => row.month);
+}
 
-  const months = counts.filter((row) => row.count > 0).map((row) => row.month);
-  cache = { at: Date.now(), months };
-  return months;
+const cachedCompleteMonths = unstable_cache(queryCompleteMonths, ["complete-months"], {
+  revalidate: HOLDINGS_REVALIDATE_SEC,
+  tags: [CACHE_TAG_HOLDINGS],
+});
+
+/** Months that have actual holdings books, not phantom “all sold” diffs from a missing disclosure. */
+export async function listCompleteMonths(_db?: SupabaseClient): Promise<string[]> {
+  return cachedCompleteMonths();
 }
 
 export async function latestCompleteMonth(db: SupabaseClient): Promise<string | null> {

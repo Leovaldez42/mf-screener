@@ -2,6 +2,7 @@ import { readFileSync } from "fs";
 import { resolve } from "path";
 import { normalizeNameKey, slugifyAmc } from "../lib/equity";
 import { createServiceClient, fetchAllRows } from "../lib/supabase";
+import { notifyRevalidate } from "../lib/notify-revalidate";
 import type { HoldingEvent } from "../lib/types";
 
 function loadEnv() {
@@ -646,6 +647,7 @@ async function main() {
       })
       .eq("id", run.id);
     console.log(`done status=${status} ok=${familiesOk} fail=${familiesFail}`);
+    if (status !== "failed") await notifyRevalidate("holdings");
   } catch (err) {
     await db
       .from("ingest_runs")

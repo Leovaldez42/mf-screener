@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Delta } from "@/components/ui";
 import { formatNumber } from "@/lib/format";
+import { sessionCacheGet, sessionCacheSet } from "@/lib/session-cache";
 
 type Payload = {
   family?: { name: string; sebi_category: string; amc_slug: string };
@@ -32,10 +33,19 @@ export default function FundPage() {
   const [data, setData] = useState<Payload | null>(null);
 
   useEffect(() => {
+    const key = `fund:${id}:${month || "_"}`;
+    const hit = sessionCacheGet<Payload>(key);
+    if (hit) {
+      setData(hit);
+      return;
+    }
     const q = month ? `?month=${month}` : "";
     fetch(`/api/v1/funds/${id}${q}`)
       .then((r) => r.json())
-      .then(setData);
+      .then((d: Payload) => {
+        setData(d);
+        if (!d.error) sessionCacheSet(key, d);
+      });
   }, [id, month]);
 
   if (!data) return <p className="text-sm text-faint">Loading…</p>;

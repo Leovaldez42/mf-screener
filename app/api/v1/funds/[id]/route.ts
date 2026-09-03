@@ -1,90 +1,27 @@
-import { NextRequest, NextResponse } from "next/server";
-import { listCompleteMonths, listFamilyMonths } from "@/lib/holdings-month";
-import { createAnonClient, supabaseConfigured } from "@/lib/supabase";
-import { asOne } from "@/lib/rel";
+import { NextRequest } from "next/server";
+import { getFundPayload } from "@/lib/cached-holdings";
+import { HOLDINGS_CACHE_CONTROL, jsonCached, jsonNoStore } from "@/lib/http-cache";
+import { supabaseConfigured } from "@/lib/supabase";
+
+export const revalidate = 300;
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!supabaseConfigured()) {
-    return NextResponse.json({ error: "supabase_not_configured" }, { status: 503 });
+    return jsonNoStore({ error: "supabase_not_configured" }, 503);
   }
   const { id } = await params;
   const familyId = Number(id);
   if (!Number.isFinite(familyId)) {
-    return NextResponse.json({ error: "invalid_id" }, { status: 400 });
+    return jsonNoStore({ error: "invalid_id" }, 400);
   }
-  const month = req.nextUrl.searchParams.get("month");
-  const db = createAnonClient();
-
-  const { data: family, error } = await db.from("families").select("*").eq("id", familyId).maybeSingle();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (!family) {
-    return NextResponse.json(
-      { error: "no_holdings", message: "This scheme is not in the Chase holdings universe (top funds by AUM)." },
-      { status: 404 },
-    );
+  const month = req.nextUrl.searchParams.get("month") || "";
+  try {
+    const payload = await getFundPayload(familyId, month);
+    if ("error" in payload && payload.error === "no_holdings") {
+      return jsonCached(payload, HOLDINGS_CACHE_CONTROL, 404);
+    }
+    return jsonCached(payload, HOLDINGS_CACHE_CONTROL);
+  } catch (e) {
+    return jsonNoStore({ error: e instanceof Error ? e.message : "fund_failed" }, 500);
   }
-
-  const complete = await listCompleteMonths(db);
-  const availableMonths = await listFamilyMonths(db, familyId, complete);
-
-  const requested = month && availableMonths.includes(month) ? month : null;
-  const monthToUse = requested || availableMonths[0] || null;
-  if (!monthToUse) {
-    return NextResponse.json({
-      family,
-      month: null,
-      holdings: [],
-      sectors: [],
-      availableMonths,
-      error: null,
-      empty: true,
-    });
-  }
-
-  const { data: snaps } = await db
-    .from("holdings_snapshots")
-    .select("stock_id, quantity, market_value_cr, weight_pct, stocks(display_name, sector)")
-    .eq("family_id", familyId)
-    .eq("month", monthToUse)
-    .limit(2000);
-
-  const { data: diffs } = await db
-    .from("holding_diffs")
-    .select("stock_id, qty_delta, weight_delta, event")
-    .eq("family_id", familyId)
-    .eq("month", monthToUse);
-
-  const diffBy = new Map((diffs || []).map((d) => [d.stock_id as string, d]));
-
-  const holdings = (snaps || [])
-    .map((s) => {
-      const st = asOne(s.stocks);
-      const d = diffBy.get(s.stock_id as string);
-      return {
-        stock_id: s.stock_id,
-        display_name: String(st?.display_name ?? "Unknown"),
-        sector: (st?.sector as string | null) ?? null,
-        quantity: Number(s.quantity),
-        market_value_cr: Number(s.market_value_cr),
-        weight_pct: Number(s.weight_pct),
-        qty_delta: d ? Number(d.qty_delta) : 0,
-        weight_delta: d ? Number(d.weight_delta) : 0,
-        event: d?.event ?? "hold",
-      };
-    })
-    .sort((a, b) => b.weight_pct - a.weight_pct);
-
-  const sectorMap = new Map<string, { weight: number; value: number }>();
-  for (const h of holdings) {
-    const key = h.sector || "Unknown";
-    const cur = sectorMap.get(key) || { weight: 0, value: 0 };
-    cur.weight += h.weight_pct;
-    cur.value += h.market_value_cr;
-    sectorMap.set(key, cur);
-  }
-  const sectors = [...sectorMap.entries()]
-    .map(([name, v]) => ({ name, weight_pct: v.weight, market_value_cr: v.value }))
-    .sort((a, b) => b.weight_pct - a.weight_pct);
-
-  return NextResponse.json({ family, month: monthToUse, holdings, sectors, availableMonths });
 }

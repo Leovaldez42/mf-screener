@@ -2,6 +2,7 @@ import { readFileSync } from "fs";
 import { resolve } from "path";
 import { rowFromFinapi, type SchemeMetric } from "../lib/scheme-metrics";
 import { createServiceClient } from "../lib/supabase";
+import { notifyRevalidate } from "../lib/notify-revalidate";
 
 function loadEnv() {
   for (const file of [".env.local", ".env"]) {
@@ -191,6 +192,7 @@ async function main() {
       })
       .eq("id", run.id);
     console.log(`done. upserted ${kept} schemes (scanned ${seen}).`);
+    await notifyRevalidate("metrics");
   } catch (e) {
     const msg = errText(e);
     await db

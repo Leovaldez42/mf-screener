@@ -19,7 +19,7 @@ export default function DataPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/v1/ingest-runs")
+    fetch("/api/v1/ingest-runs", { cache: "no-store" })
       .then(async (r) => {
         const d = await r.json();
         if (!r.ok) setError(d.error || "Could not load runs");
