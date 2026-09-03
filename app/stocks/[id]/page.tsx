@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Delta, loadWatchlist, saveWatchlist } from "@/components/ui";
-import { formatNumber } from "@/lib/format";
+import { formatMonthLabel, formatNumber } from "@/lib/format";
 
 type Payload = {
   stock?: { display_name: string; sector: string | null };
@@ -44,7 +44,7 @@ export default function StockPage() {
     saveWatchlist(next);
   }
 
-  if (!data) return <p className="text-sm text-zinc-500">Loading…</p>;
+  if (!data) return <p className="text-sm text-faint">Loading…</p>;
   if (data.error) return <p className="text-sm text-amber-400">{data.error}</p>;
 
   return (
@@ -52,27 +52,29 @@ export default function StockPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-medium">{data.stock?.display_name}</h1>
-          <p className="text-sm text-zinc-400">{data.stock?.sector || "No sector"}</p>
+          <p className="text-sm text-muted">{data.stock?.sector || "No sector"}</p>
         </div>
-        <button className="rounded border border-zinc-700 px-3 py-1 text-sm" onClick={toggle}>
+        <button className="rounded border border-border px-3 py-1 text-sm" onClick={toggle}>
           {watch.includes(id) ? "Watched" : "Watch"}
         </button>
       </div>
       <div>
-        <h2 className="mb-2 text-sm text-zinc-500">Crowding</h2>
+        <h2 className="mb-2 text-sm text-faint">Crowding</h2>
+        <p className="mb-3 text-xs text-muted">
+          How many active-equity funds in this universe held the stock that month — not all Indian MFs.
+        </p>
         <div className="flex flex-wrap gap-4 text-sm">
           {(data.history || []).map((h) => (
-            <div key={h.month} className="rounded border border-zinc-800 px-3 py-2">
-              <div className="text-zinc-500">{h.month}</div>
+            <div key={h.month} className="rounded border border-border px-3 py-2">
+              <div className="text-faint">{formatMonthLabel(h.month)}</div>
               <div>{h.fund_count} funds</div>
-              <Delta value={h.fund_count_delta} />
             </div>
           ))}
         </div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[720px] text-left text-sm">
-          <thead className="text-zinc-500">
+          <thead className="text-faint">
             <tr>
               <th className="py-2 pr-3 font-normal">Fund</th>
               <th className="py-2 pr-3 font-normal">Category</th>
@@ -84,19 +86,19 @@ export default function StockPage() {
           </thead>
           <tbody>
             {(data.holders || []).map((h) => (
-              <tr key={h.family_id} className="border-t border-zinc-800">
+              <tr key={h.family_id} className="border-t border-border">
                 <td className="py-2 pr-3">
                   <Link className="hover:underline" href={`/funds/${h.family_id}?month=${month || data.month}`}>
                     {h.family_name}
                   </Link>
                 </td>
-                <td className="py-2 pr-3 text-zinc-400">{h.sebi_category}</td>
+                <td className="py-2 pr-3 text-muted">{h.sebi_category}</td>
                 <td className="py-2 pr-3">{formatNumber(h.quantity, 0)}</td>
                 <td className="py-2 pr-3">{formatNumber(h.weight_pct)}</td>
                 <td className="py-2 pr-3">
                   <Delta value={h.qty_delta} />
                 </td>
-                <td className="py-2 text-zinc-400">{h.event}</td>
+                <td className="py-2 text-muted">{h.event}</td>
               </tr>
             ))}
           </tbody>

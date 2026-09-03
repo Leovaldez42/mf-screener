@@ -1,13 +1,44 @@
 @import "tailwindcss";
 
 :root {
+  color-scheme: light;
+  --background: #f7f7f5;
+  --foreground: #18181b;
+  --muted: #52525b;
+  --faint: #71717a;
+  --border: #e4e4e7;
+  --card: #ffffff;
+  --input: #ffffff;
+  --surface: #f4f4f5;
+  --gain: #15803d;
+  --loss: #b91c1c;
+}
+
+html.dark {
+  color-scheme: dark;
   --background: #09090b;
-  --foreground: #f4f4f5;
+  --foreground: #fafafa;
+  --muted: #a1a1aa;
+  --faint: #71717a;
+  --border: #27272a;
+  --card: #18181b;
+  --input: #18181b;
+  --surface: #27272a;
+  --gain: #4ade80;
+  --loss: #fb7185;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-border: var(--border);
+  --color-card: var(--card);
+  --color-input: var(--input);
+  --color-surface: var(--surface);
+  --color-gain: var(--gain);
+  --color-loss: var(--loss);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -24,3 +55,5 @@ a {
 table {
   font-variant-numeric: tabular-nums;
 }
+
+/* Next.js “N” badge — also disabled via next.config devIndicators */

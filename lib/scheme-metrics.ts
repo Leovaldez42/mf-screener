@@ -93,6 +93,56 @@ export function rowFromFinapi(raw: Record<string, unknown>): SchemeMetric | null
   };
 }
 
+export const CATEGORY_AVG_KEYS = [
+  "expense_ratio",
+  "sharpe_1y",
+  "sharpe_3y",
+  "sharpe_5y",
+  "sortino_3y",
+  "std_dev_3y",
+  "beta_3y",
+  "cagr_1y",
+  "cagr_3y",
+  "cagr_5y",
+  "cagr_7y",
+  "cagr_10y",
+  "cagr_inception",
+  "aum_cr",
+] as const;
+
+export type CategoryAvgKey = (typeof CATEGORY_AVG_KEYS)[number];
+
+export type CategoryAverage = {
+  category: string;
+  n: number;
+} & Record<CategoryAvgKey, number | null>;
+
+function meanIgnoreNull(values: Array<number | null | undefined>): number | null {
+  const nums = values.filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+  if (!nums.length) return null;
+  return nums.reduce((a, b) => a + b, 0) / nums.length;
+}
+
+export function equalWeightCategoryAverages(rows: SchemeMetric[]): Record<string, CategoryAverage> {
+  const byCat = new Map<string, SchemeMetric[]>();
+  for (const row of rows) {
+    const cat = (row.category || "").trim();
+    if (!cat) continue;
+    const list = byCat.get(cat) || [];
+    list.push(row);
+    byCat.set(cat, list);
+  }
+  const out: Record<string, CategoryAverage> = {};
+  for (const [category, list] of byCat) {
+    const avg = { category, n: list.length } as CategoryAverage;
+    for (const key of CATEGORY_AVG_KEYS) {
+      avg[key] = meanIgnoreNull(list.map((r) => r[key]));
+    }
+    out[category] = avg;
+  }
+  return out;
+}
+
 export const COMPARE_MAX = 6;
 
 export const SORTABLE = [

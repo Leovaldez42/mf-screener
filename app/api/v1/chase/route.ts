@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAnonClient, supabaseConfigured } from "@/lib/supabase";
+import { listCompleteMonths } from "@/lib/holdings-month";
+import { createAnonClient, fetchAllRows, supabaseConfigured } from "@/lib/supabase";
 import { asOne } from "@/lib/rel";
 import type { ChaseRow } from "@/lib/types";
 
@@ -10,31 +11,44 @@ export async function GET(req: NextRequest) {
   const month = req.nextUrl.searchParams.get("month");
   const sector = req.nextUrl.searchParams.get("sector");
   const minFunds = Number(req.nextUrl.searchParams.get("min_funds") || "0");
-  const sort = req.nextUrl.searchParams.get("sort") || "abs_value";
+  const ids = (req.nextUrl.searchParams.get("ids") || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 100);
 
   const db = createAnonClient();
-  let monthToUse = month;
-  if (!monthToUse) {
-    const { data: latest } = await db
-      .from("stock_month_aggregates")
-      .select("month")
-      .order("month", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    monthToUse = latest?.month ?? null;
-  }
+  const complete = await listCompleteMonths(db);
+  const monthToUse = month && complete.includes(month) ? month : complete[0] ?? null;
   if (!monthToUse) {
     return NextResponse.json({ month: null, rows: [] as ChaseRow[] });
   }
 
-  const { data, error } = await db
-    .from("stock_month_aggregates")
-    .select(
-      "stock_id, fund_count, fund_count_delta, net_qty_delta, net_value_delta_cr, median_weight_pct, stocks(display_name, sector)"
-    )
-    .eq("month", monthToUse);
+  type AggRow = {
+    stock_id: string;
+    fund_count: number;
+    fund_count_delta: number;
+    net_qty_delta: number;
+    net_value_delta_cr: number;
+    median_weight_pct: number | null;
+    stocks: unknown;
+  };
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  let data: AggRow[];
+  try {
+    data = await fetchAllRows<AggRow>(() => {
+      let q = db
+        .from("stock_month_aggregates")
+        .select(
+          "stock_id, fund_count, fund_count_delta, net_qty_delta, net_value_delta_cr, median_weight_pct, stocks(display_name, sector)",
+        )
+        .eq("month", monthToUse);
+      if (ids.length) q = q.in("stock_id", ids);
+      return q;
+    });
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : "chase_failed" }, { status: 500 });
+  }
 
   let rows: ChaseRow[] = (data || []).map((r) => {
     const stock = asOne(r.stocks);
@@ -57,10 +71,29 @@ export async function GET(req: NextRequest) {
     rows = rows.filter((r) => r.fund_count >= minFunds);
   }
 
-  rows.sort((a, b) => {
-    if (sort === "fund_delta") return Math.abs(b.fund_count_delta) - Math.abs(a.fund_count_delta);
-    return Math.abs(b.net_value_delta_cr) - Math.abs(a.net_value_delta_cr);
-  });
+  if (ids.length) {
+    const have = new Set(rows.map((r) => r.stock_id));
+    const missing = ids.filter((id) => !have.has(id));
+    if (missing.length) {
+      const { data: stocks } = await db.from("stocks").select("id, display_name, sector").in("id", missing);
+      for (const s of stocks || []) {
+        rows.push({
+          stock_id: s.id as string,
+          display_name: String(s.display_name),
+          sector: (s.sector as string | null) ?? null,
+          fund_count: 0,
+          fund_count_delta: 0,
+          net_qty_delta: 0,
+          net_value_delta_cr: 0,
+          median_weight_pct: null,
+        });
+      }
+    }
+    const order = new Map(ids.map((id, i) => [id, i]));
+    rows.sort((a, b) => (order.get(a.stock_id) ?? 999) - (order.get(b.stock_id) ?? 999));
+  } else {
+    rows.sort((a, b) => Math.abs(b.net_value_delta_cr) - Math.abs(a.net_value_delta_cr));
+  }
 
   return NextResponse.json({ month: monthToUse, rows });
 }

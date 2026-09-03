@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { ThemeToggle } from "@/components/theme";
 import { formatMonthLabel } from "@/lib/format";
 
 export function Shell({ children }: { children: React.ReactNode }) {
@@ -10,6 +11,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const search = useSearchParams();
   const router = useRouter();
   const [months, setMonths] = useState<string[]>([]);
+  const [menuOpen, setMenuOpen] = useState(false);
   const month = search.get("month") || months[0] || "";
 
   useEffect(() => {
@@ -18,6 +20,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
       .then((d) => setMonths(d.months || []))
       .catch(() => setMonths([]));
   }, []);
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
 
   function setMonth(next: string) {
     const params = new URLSearchParams(search.toString());
@@ -33,7 +39,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
     { href: "/compare", label: "Compare" },
     { href: "/sectors", label: "Sectors" },
     { href: "/watchlist", label: "Watchlist" },
-    { href: "/data", label: "Data" },
     { href: "/about", label: "About" },
   ];
   const showMonth =
@@ -43,35 +48,46 @@ export function Shell({ children }: { children: React.ReactNode }) {
     pathname === "/sectors" ||
     pathname === "/watchlist";
 
+  function navClass(href: string) {
+    const active =
+      pathname === href ||
+      (href !== "/" && pathname.startsWith(href)) ||
+      (href === "/screener" && pathname.startsWith("/schemes"));
+    return active ? "text-foreground" : "text-muted hover:text-foreground";
+  }
+
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <header className="border-b border-zinc-800">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-4 py-3">
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="border-b border-border bg-card">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3">
           <Link href="/" className="font-medium tracking-tight">
             MF Chase
           </Link>
-          <nav className="flex flex-wrap gap-3 text-sm text-zinc-400">
+          <div className="ml-auto flex items-center gap-2 md:order-last">
+            <ThemeToggle />
+            <button
+              type="button"
+              className="rounded border border-border px-2 py-1 text-xs text-muted md:hidden"
+              onClick={() => setMenuOpen((v) => !v)}
+              aria-expanded={menuOpen}
+            >
+              {menuOpen ? "Close" : "Menu"}
+            </button>
+          </div>
+          <nav
+            className={`${menuOpen ? "flex" : "hidden"} w-full flex-col gap-2 text-sm md:ml-0 md:flex md:w-auto md:flex-row md:flex-wrap md:gap-3`}
+          >
             {nav.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={
-                  pathname === item.href ||
-                  (item.href !== "/" && pathname.startsWith(item.href)) ||
-                  (item.href === "/screener" && pathname.startsWith("/schemes"))
-                    ? "text-zinc-100"
-                    : "hover:text-zinc-200"
-                }
-              >
+              <Link key={item.href} href={item.href} className={navClass(item.href)}>
                 {item.label}
               </Link>
             ))}
           </nav>
           {showMonth ? (
-            <div className="ml-auto flex items-center gap-2 text-sm">
-              <span className="text-zinc-500">Holdings as of</span>
+            <div className="flex w-full items-center gap-2 text-sm md:ml-auto md:w-auto">
+              <span className="text-faint">Holdings as of</span>
               <select
-                className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1"
+                className="min-w-0 flex-1 rounded border border-border bg-input px-2 py-1 md:flex-none"
                 value={month}
                 onChange={(e) => setMonth(e.target.value)}
               >
@@ -84,7 +100,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               </select>
             </div>
           ) : (
-            <div className="ml-auto" />
+            <div className="hidden md:ml-auto md:block" />
           )}
         </div>
       </header>
@@ -94,7 +110,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 }
 
 export function Delta({ value }: { value: number }) {
-  const cls = value > 0 ? "text-emerald-400" : value < 0 ? "text-rose-400" : "text-zinc-400";
+  const cls = value > 0 ? "text-gain" : value < 0 ? "text-loss" : "text-muted";
   const sign = value > 0 ? "+" : "";
   return (
     <span className={cls}>

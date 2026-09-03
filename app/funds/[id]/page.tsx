@@ -8,7 +8,7 @@ import { formatNumber } from "@/lib/format";
 
 type Payload = {
   family?: { name: string; sebi_category: string; amc_slug: string };
-  month?: string;
+  month?: string | null;
   holdings?: {
     stock_id: string;
     display_name: string;
@@ -21,6 +21,8 @@ type Payload = {
   }[];
   sectors?: { name: string; weight_pct: number }[];
   error?: string;
+  message?: string;
+  empty?: boolean;
 };
 
 export default function FundPage() {
@@ -36,23 +38,43 @@ export default function FundPage() {
       .then(setData);
   }, [id, month]);
 
-  if (!data) return <p className="text-sm text-zinc-500">Loading…</p>;
-  if (data.error) return <p className="text-sm text-amber-400">{data.error}</p>;
+  if (!data) return <p className="text-sm text-faint">Loading…</p>;
+  if (data.error === "no_holdings" || data.error === "not_found") {
+    return (
+      <div className="space-y-2">
+        <p className="text-sm text-amber-700 dark:text-amber-400">
+          Holdings for this scheme have not been ingested yet.
+        </p>
+        <p className="text-sm text-faint">
+          Run <code>npm run ingest</code> to pull monthly books for every Direct Growth active-equity
+          scheme in the screener. The first load can take a while.
+        </p>
+      </div>
+    );
+  }
+  if (data.error) return <p className="text-sm text-amber-700 dark:text-amber-400">{data.error}</p>;
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-medium">{data.family?.name}</h1>
-        <p className="text-sm text-zinc-400">
+        <p className="text-sm text-muted">
           {data.family?.amc_slug} · {data.family?.sebi_category}
+          {data.month ? ` · Book as of ${data.month}` : ""}
         </p>
       </div>
+      {!data.holdings?.length ? (
+        <p className="text-sm text-faint">
+          No portfolio lines for this month. Holdings usually publish about ten working days after
+          month-end.
+        </p>
+      ) : null}
       <div className="space-y-2">
         {(data.sectors || []).slice(0, 8).map((s) => (
           <div key={s.name} className="flex items-center gap-3 text-sm">
-            <div className="w-40 truncate text-zinc-400">{s.name}</div>
-            <div className="h-2 flex-1 rounded bg-zinc-800">
-              <div className="h-2 rounded bg-zinc-400" style={{ width: `${Math.min(100, s.weight_pct)}%` }} />
+            <div className="w-40 truncate text-muted">{s.name}</div>
+            <div className="h-2 flex-1 rounded bg-surface">
+              <div className="h-2 rounded bg-muted" style={{ width: `${Math.min(100, s.weight_pct)}%` }} />
             </div>
             <div className="w-16 text-right">{formatNumber(s.weight_pct)}%</div>
           </div>
@@ -60,7 +82,7 @@ export default function FundPage() {
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[720px] text-left text-sm">
-          <thead className="text-zinc-500">
+          <thead className="text-faint">
             <tr>
               <th className="py-2 pr-3 font-normal">Stock</th>
               <th className="py-2 pr-3 font-normal">Sector</th>
@@ -72,19 +94,19 @@ export default function FundPage() {
           </thead>
           <tbody>
             {(data.holdings || []).map((h) => (
-              <tr key={h.stock_id} className="border-t border-zinc-800">
+              <tr key={h.stock_id} className="border-t border-border">
                 <td className="py-2 pr-3">
-                  <Link className="hover:underline" href={`/stocks/${h.stock_id}?month=${month || data.month}`}>
+                  <Link className="hover:underline" href={`/stocks/${h.stock_id}?month=${data.month || month}`}>
                     {h.display_name}
                   </Link>
                 </td>
-                <td className="py-2 pr-3 text-zinc-400">{h.sector || "—"}</td>
+                <td className="py-2 pr-3 text-muted">{h.sector || "—"}</td>
                 <td className="py-2 pr-3">{formatNumber(h.weight_pct)}</td>
                 <td className="py-2 pr-3">{formatNumber(h.market_value_cr)}</td>
                 <td className="py-2 pr-3">
                   <Delta value={h.qty_delta} />
                 </td>
-                <td className="py-2 text-zinc-400">{h.event}</td>
+                <td className="py-2 text-muted">{h.event}</td>
               </tr>
             ))}
           </tbody>

@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { CATEGORY_STYLES, categoryStyleOrFilter } from "@/lib/equity";
-import { SORTABLE, type SortKey } from "@/lib/scheme-metrics";
+import {
+  equalWeightCategoryAverages,
+  SORTABLE,
+  type SchemeMetric,
+  type SortKey,
+} from "@/lib/scheme-metrics";
 import { createAnonClient, supabaseConfigured } from "@/lib/supabase";
 
 export async function GET(req: NextRequest) {
@@ -26,7 +31,7 @@ export async function GET(req: NextRequest) {
   const maxAum = sp.get("maxAum");
   const sort = (sp.get("sort") || "sharpe_3y") as SortKey;
   const order = sp.get("order") === "asc" ? true : false;
-  const limit = Math.min(500, Math.max(1, Number(sp.get("limit") || "150")));
+  const limit = Math.min(800, Math.max(1, Number(sp.get("limit") || "150")));
 
   const db = createAnonClient();
   let query = db
@@ -62,18 +67,47 @@ export async function GET(req: NextRequest) {
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const { data: houseRows } = await db
+  const { data: peerRows, error: peerErr } = await db
     .from("scheme_metrics")
-    .select("fund_house")
+    .select("*")
+    .eq("is_direct", true)
+    .eq("is_growth", true)
+    .eq("is_active_equity", true)
+    .limit(2000);
+  if (peerErr) return NextResponse.json({ error: peerErr.message }, { status: 500 });
+
+  const peers = (peerRows || []) as SchemeMetric[];
+  const categoryAverages = equalWeightCategoryAverages(peers);
+  const houses = [...new Set(peers.map((r) => String(r.fund_house)).filter(Boolean))].sort();
+
+  let styleAverage = null;
+  if (needles.length) {
+    const stylePeers = peers.filter((r) => {
+      const c = (r.category || "").toLowerCase();
+      return needles.some((n) => c.includes(n));
+    });
+    const grouped = equalWeightCategoryAverages(
+      stylePeers.map((r) => ({ ...r, category: "__style__" })),
+    );
+    styleAverage = grouped["__style__"]
+      ? { ...grouped["__style__"], category: style, n: stylePeers.length }
+      : null;
+  }
+
+  const { count } = await db
+    .from("scheme_metrics")
+    .select("scheme_code", { count: "exact", head: true })
     .eq("is_direct", true)
     .eq("is_growth", true)
     .eq("is_active_equity", true);
-
-  const houses = [...new Set((houseRows || []).map((r) => String(r.fund_house)).filter(Boolean))].sort();
 
   return NextResponse.json({
     schemes: data || [],
     houses,
     styles: CATEGORY_STYLES.map((s) => ({ id: s.id, label: s.label })),
+    categoryAverages,
+    styleAverage,
+    total: (data || []).length,
+    universe: count ?? peers.length,
   });
 }

@@ -21,3 +21,25 @@ export function createServiceClient(): SupabaseClient {
 export function supabaseConfigured(): boolean {
   return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 }
+
+/** PostgREST returns 1000 rows unless you page. Rebuild queries must use this. */
+export async function fetchAllRows<T>(
+  makeQuery: () => {
+    range: (
+      from: number,
+      to: number,
+    ) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>;
+  },
+  page = 1000,
+  max = 500000,
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; from < max; from += page) {
+    const { data, error } = await makeQuery().range(from, from + page - 1);
+    if (error) throw new Error(error.message);
+    if (!data?.length) break;
+    out.push(...data);
+    if (data.length < page) break;
+  }
+  return out;
+}

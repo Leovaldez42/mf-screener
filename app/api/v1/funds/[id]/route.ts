@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { listCompleteMonths, listFamilyMonths } from "@/lib/holdings-month";
 import { createAnonClient, supabaseConfigured } from "@/lib/supabase";
 import { asOne } from "@/lib/rel";
 
@@ -16,25 +17,36 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const { data: family, error } = await db.from("families").select("*").eq("id", familyId).maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (!family) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  if (!family) {
+    return NextResponse.json(
+      { error: "no_holdings", message: "This scheme is not in the Chase holdings universe (top funds by AUM)." },
+      { status: 404 },
+    );
+  }
 
-  let monthToUse = month || family.latest_month;
+  const complete = await listCompleteMonths(db);
+  const availableMonths = await listFamilyMonths(db, familyId, complete);
+
+  const requested = month && availableMonths.includes(month) ? month : null;
+  const monthToUse = requested || availableMonths[0] || null;
   if (!monthToUse) {
-    const { data: latest } = await db
-      .from("holdings_snapshots")
-      .select("month")
-      .eq("family_id", familyId)
-      .order("month", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    monthToUse = latest?.month;
+    return NextResponse.json({
+      family,
+      month: null,
+      holdings: [],
+      sectors: [],
+      availableMonths,
+      error: null,
+      empty: true,
+    });
   }
 
   const { data: snaps } = await db
     .from("holdings_snapshots")
     .select("stock_id, quantity, market_value_cr, weight_pct, stocks(display_name, sector)")
     .eq("family_id", familyId)
-    .eq("month", monthToUse);
+    .eq("month", monthToUse)
+    .limit(2000);
 
   const { data: diffs } = await db
     .from("holding_diffs")
@@ -74,5 +86,5 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     .map(([name, v]) => ({ name, weight_pct: v.weight, market_value_cr: v.value }))
     .sort((a, b) => b.weight_pct - a.weight_pct);
 
-  return NextResponse.json({ family, month: monthToUse, holdings, sectors });
+  return NextResponse.json({ family, month: monthToUse, holdings, sectors, availableMonths });
 }
