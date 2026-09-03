@@ -36,7 +36,7 @@ export default function FundPage() {
     const key = `fund:${id}:${month || "_"}`;
     const hit = sessionCacheGet<Payload>(key);
     if (hit) {
-      setData(hit);
+      queueMicrotask(() => setData(hit));
       return;
     }
     const q = month ? `?month=${month}` : "";
@@ -91,7 +91,7 @@ export default function FundPage() {
         ))}
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[720px] text-left text-sm">
+        <table className="w-full min-w-180 text-left text-sm">
           <thead className="text-faint">
             <tr>
               <th className="py-2 pr-3 font-normal">Stock</th>

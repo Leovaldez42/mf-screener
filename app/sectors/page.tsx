@@ -19,13 +19,20 @@ export default function SectorsPage() {
     const key = `sectors:${month || "_"}`;
     const hit = sessionCacheGet<Row[]>(key);
     if (hit) {
-      setRows(hit);
-      setError(null);
-      setLoading(false);
-      return;
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setRows(hit);
+        setError(null);
+        setLoading(false);
+      });
+      return () => {
+        cancelled = true;
+      };
     }
     const q = month ? `?month=${month}` : "";
-    setLoading(true);
+    queueMicrotask(() => {
+      if (!cancelled) setLoading(true);
+    });
     fetch(`/api/v1/sectors${q}`)
       .then(async (r) => {
         const d = await r.json();

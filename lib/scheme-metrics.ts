@@ -13,6 +13,7 @@ export type SchemeMetric = {
   is_active_equity: boolean;
   aum_cr: number | null;
   expense_ratio: number | null;
+  pe: number | null;
   sharpe_1y: number | null;
   sharpe_3y: number | null;
   sharpe_5y: number | null;
@@ -64,6 +65,7 @@ export function rowFromFinapi(raw: Record<string, unknown>): SchemeMetric | null
   const option_name = raw.optionName != null ? String(raw.optionName) : null;
   const cagr = (raw.cagr || {}) as Record<string, unknown>;
   const rm = (raw.riskMetrics || {}) as Record<string, { timeframes?: Timeframe[] }>;
+  const fundamentals = (raw.fundamentals || {}) as Record<string, unknown>;
 
   return {
     scheme_code,
@@ -78,6 +80,7 @@ export function rowFromFinapi(raw: Record<string, unknown>): SchemeMetric | null
     is_active_equity: isActiveEquityCategory(category),
     aum_cr: parseNum(raw.aum),
     expense_ratio: parseNum(raw.expenseRatio ?? raw.totalExpensesRatio),
+    pe: parseNum(fundamentals.pe),
     sharpe_1y: tfValue(rm.sharpRatio, "1y"),
     sharpe_3y: tfValue(rm.sharpRatio, "3y"),
     sharpe_5y: tfValue(rm.sharpRatio, "5y"),
@@ -95,6 +98,7 @@ export function rowFromFinapi(raw: Record<string, unknown>): SchemeMetric | null
 
 export const CATEGORY_AVG_KEYS = [
   "expense_ratio",
+  "pe",
   "sharpe_1y",
   "sharpe_3y",
   "sharpe_5y",
@@ -150,6 +154,7 @@ export const SORTABLE = [
   "sharpe_3y",
   "sharpe_5y",
   "expense_ratio",
+  "pe",
   "cagr_1y",
   "cagr_3y",
   "cagr_5y",

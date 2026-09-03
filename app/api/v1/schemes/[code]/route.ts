@@ -1,4 +1,3 @@
-import { NextRequest } from "next/server";
 import { getSchemePage } from "@/lib/cached-metrics";
 import { METRICS_CACHE_CONTROL, jsonCached, jsonNoStore } from "@/lib/http-cache";
 import { supabaseConfigured } from "@/lib/supabase";

@@ -40,7 +40,9 @@ export default function ChasePage() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => setWatch(loadWatchlist()), []);
+  useEffect(() => {
+    queueMicrotask(() => setWatch(loadWatchlist()));
+  }, []);
   useEffect(() => {
     loadMonths()
       .then(setMonths)
@@ -52,14 +54,21 @@ export default function ChasePage() {
     const key = `chase:${month || "_"}`;
     const hit = sessionCacheGet<ChaseRow[]>(key);
     if (hit) {
-      setAllRows(hit);
-      setError(null);
-      setLoading(false);
-      return;
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setAllRows(hit);
+        setError(null);
+        setLoading(false);
+      });
+      return () => {
+        cancelled = true;
+      };
     }
     const q = new URLSearchParams();
     if (month) q.set("month", month);
-    setLoading(true);
+    queueMicrotask(() => {
+      if (!cancelled) setLoading(true);
+    });
     fetch(`/api/v1/chase?${q}`)
       .then(async (r) => {
         const d = await r.json();

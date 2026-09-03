@@ -47,6 +47,7 @@ const FIELDS = [
   "schemeCategory",
   "schemeCategoryLabel",
   "aum",
+  "fundamentals",
 ].join(",");
 
 function sleep(ms: number) {

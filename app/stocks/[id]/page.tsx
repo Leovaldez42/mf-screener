@@ -30,13 +30,15 @@ export default function StockPage() {
   const [data, setData] = useState<Payload | null>(null);
   const [watch, setWatch] = useState<string[]>([]);
 
-  useEffect(() => setWatch(loadWatchlist()), []);
+  useEffect(() => {
+    queueMicrotask(() => setWatch(loadWatchlist()));
+  }, []);
 
   useEffect(() => {
     const key = `stock:${id}:${month || "_"}`;
     const hit = sessionCacheGet<Payload>(key);
     if (hit) {
-      setData(hit);
+      queueMicrotask(() => setData(hit));
       return;
     }
     const q = month ? `?month=${month}` : "";
@@ -83,7 +85,7 @@ export default function StockPage() {
         </div>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[720px] text-left text-sm">
+        <table className="w-full min-w-180 text-left text-sm">
           <thead className="text-faint">
             <tr>
               <th className="py-2 pr-3 font-normal">Fund</th>

@@ -23,7 +23,6 @@ async function main() {
     headers: { "X-API-Key": KEY },
   });
   const j = await r.json();
-  const row = Array.isArray(j.data) ? j.data[0] : j.data?.content?.[0] || j.data?.[0];
   console.log("top", Object.keys(j));
   console.log("data type", Array.isArray(j.data) ? "array "+j.data.length : typeof j.data, j.data && !Array.isArray(j.data) ? Object.keys(j.data) : "");
   const d = await fetch("https://finapi.upvaly.com/api/mf/scheme-code/122639?fields=cagr,riskMetrics,ranks,expenseRatio", {
