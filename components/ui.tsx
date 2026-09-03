@@ -58,13 +58,21 @@ export function Shell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
       <header className="border-b border-border bg-card">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3">
           <Link href="/" className="font-medium tracking-tight">
             MF Chase
           </Link>
-          <div className="ml-auto flex items-center gap-2 md:order-last">
+          <div className="ml-auto flex items-center gap-3 md:order-last">
+            <a
+              href="https://github.com/Leovaldez42/mf-screener"
+              className="text-sm text-muted hover:text-foreground"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Open source <span className="text-rose-500" aria-hidden>♥</span>
+            </a>
             <ThemeToggle />
             <button
               type="button"
@@ -105,7 +113,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           )}
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6">{children}</main>
     </div>
   );
 }
