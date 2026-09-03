@@ -40,6 +40,13 @@ export default function RootLayout({
         <Script id="mf-chase-theme" strategy="beforeInteractive">
           {`(function(){try{var t=localStorage.getItem("mf-chase-theme");var dark=t==="dark"||(t!=="light"&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(dark)document.documentElement.classList.add("dark");else document.documentElement.classList.remove("dark");}catch(e){}})();`}
         </Script>
+        {process.env.NODE_ENV === "production" ? (
+          <Script
+            src="https://cloud.umami.is/script.js"
+            data-website-id="b8ea7ec0-8b63-41f3-bc3f-6d375ce82a0c"
+            strategy="afterInteractive"
+          />
+        ) : null}
         <Suspense fallback={<div className="min-h-screen bg-background" />}>
           <Shell>{children}</Shell>
         </Suspense>
