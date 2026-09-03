@@ -13,6 +13,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [months, setMonths] = useState<string[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPath, setMenuPath] = useState(pathname);
+  if (pathname !== menuPath) {
+    setMenuPath(pathname);
+    setMenuOpen(false);
+  }
   const month = search.get("month") || months[0] || "";
 
   useEffect(() => {
@@ -20,10 +25,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
       .then(setMonths)
       .catch(() => setMonths([]));
   }, []);
-
-  useEffect(() => {
-    setMenuOpen(false);
-  }, [pathname]);
 
   function setMonth(next: string) {
     const params = new URLSearchParams(search.toString());

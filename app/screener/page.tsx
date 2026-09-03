@@ -123,7 +123,7 @@ export default function ScreenerPage() {
   function cell(s: SchemeMetric, key: (typeof TABLE_COLUMNS)[number]["key"]) {
     if (key === "name") {
       return (
-        <Link className="block max-w-[220px] leading-snug hover:underline sm:max-w-[280px]" href={`/schemes/${s.scheme_code}`}>
+        <Link className="block max-w-55 leading-snug hover:underline sm:max-w-70" href={`/schemes/${s.scheme_code}`}>
           {s.name}
         </Link>
       );

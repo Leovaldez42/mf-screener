@@ -52,12 +52,12 @@ const cachedCompleteMonths = unstable_cache(queryCompleteMonths, ["complete-mont
 });
 
 /** Months that have actual holdings books, not phantom “all sold” diffs from a missing disclosure. */
-export async function listCompleteMonths(_db?: SupabaseClient): Promise<string[]> {
+export async function listCompleteMonths(): Promise<string[]> {
   return cachedCompleteMonths();
 }
 
-export async function latestCompleteMonth(db: SupabaseClient): Promise<string | null> {
-  const months = await listCompleteMonths(db);
+export async function latestCompleteMonth(): Promise<string | null> {
+  const months = await listCompleteMonths();
   return months[0] ?? null;
 }
 

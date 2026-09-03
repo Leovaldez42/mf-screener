@@ -33,42 +33,38 @@ function cell(s: SchemeMetric, key: keyof SchemeMetric, digits?: number) {
 
 function CompareInner() {
   const search = useSearchParams();
-  const [schemes, setSchemes] = useState<SchemeMetric[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const [codes, setCodes] = useState<string[]>([]);
+  const [fetchedSchemes, setFetchedSchemes] = useState<SchemeMetric[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
-  const [hits, setHits] = useState<SchemeMetric[]>([]);
+  const [fetchedHits, setFetchedHits] = useState<SchemeMetric[]>([]);
+  const schemes = codes.length < 2 ? [] : fetchedSchemes;
+  const hits = q.trim().length < 2 ? [] : fetchedHits;
 
   useEffect(() => {
     const fromUrl = (search.get("codes") || "").split(",").map((s) => s.trim()).filter(Boolean);
-    setCodes(fromUrl.length ? fromUrl : loadCompare());
+    queueMicrotask(() => setCodes(fromUrl.length ? fromUrl : loadCompare()));
   }, [search]);
 
   useEffect(() => {
-    if (codes.length < 2) {
-      setSchemes([]);
-      return;
-    }
+    if (codes.length < 2) return;
     fetch(`/api/v1/schemes/compare?codes=${codes.join(",")}`)
       .then(async (r) => {
         const d = await r.json();
         if (!r.ok) setError(d.error || "Could not compare");
         else setError(null);
-        setSchemes(d.schemes || []);
+        setFetchedSchemes(d.schemes || []);
       })
       .catch(() => setError("Could not compare"));
   }, [codes]);
 
   useEffect(() => {
-    if (q.trim().length < 2) {
-      setHits([]);
-      return;
-    }
+    if (q.trim().length < 2) return;
     const t = setTimeout(() => {
       fetch(`/api/v1/schemes?q=${encodeURIComponent(q.trim())}&limit=12&sort=aum_cr`)
         .then((r) => r.json())
-        .then((d) => setHits(d.schemes || []))
-        .catch(() => setHits([]));
+        .then((d) => setFetchedHits(d.schemes || []))
+        .catch(() => setFetchedHits([]));
     }, 200);
     return () => clearTimeout(t);
   }, [q]);
@@ -81,7 +77,6 @@ function CompareInner() {
       return next;
     });
     setQ("");
-    setHits([]);
   }
 
   function remove(code: string) {

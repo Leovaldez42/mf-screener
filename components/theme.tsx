@@ -37,7 +37,11 @@ export function ThemeToggle() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
   useEffect(() => {
-    setTheme(readTheme());
+    queueMicrotask(() => {
+      const next = readTheme();
+      setTheme(next);
+      paint(next);
+    });
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const onChange = () => {
       try {

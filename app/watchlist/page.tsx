@@ -14,16 +14,14 @@ function WatchlistInner() {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => setIds(loadWatchlist()), []);
+  useEffect(() => {
+    queueMicrotask(() => setIds(loadWatchlist()));
+  }, []);
 
   useEffect(() => {
     if (ids === null) return;
-    if (ids.length === 0) {
-      setRows([]);
-      setLoaded(true);
-      return;
-    }
-    setLoaded(false);
+    if (ids.length === 0) return;
+    queueMicrotask(() => setLoaded(false));
     const q = new URLSearchParams();
     q.set("ids", ids.join(","));
     if (month) q.set("month", month);

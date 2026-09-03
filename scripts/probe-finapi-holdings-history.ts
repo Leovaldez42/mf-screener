@@ -26,42 +26,6 @@ loadEnv();
 const KEY = process.env.FINAPI_API_KEY!;
 const BASE = "https://finapi.upvaly.com";
 
-async function hit(path: string) {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { "X-API-Key": KEY, Accept: "application/json" },
-  });
-  const text = await res.text();
-  let summary = text.slice(0, 200).replace(/\s+/g, " ");
-  try {
-    const j = JSON.parse(text);
-    const d = j.data;
-    if (Array.isArray(d)) {
-      const months = [
-        ...new Set(
-          d.map((x: { month?: string; asOf?: string; holdingsAsOf?: string; period?: string }) =>
-            x.month || x.asOf || x.holdingsAsOf || x.period || Object.keys(x)[0]
-          )
-        ),
-      ];
-      const first = d[0];
-      summary = `array len=${d.length} firstKeys=${first ? Object.keys(first).join(",") : "-"} monthsSample=${months.slice(0, 8).join("|")}`;
-      if (first?.holdings && Array.isArray(first.holdings) && first.holdings[0]) {
-        summary += ` holding0keys=${Object.keys(first.holdings[0]).join(",")}`;
-      }
-    } else if (d && typeof d === "object") {
-      summary = `object keys=${Object.keys(d).join(",")}`;
-      const inner = (d as { holdings?: unknown; history?: unknown }).history || (d as { months?: unknown }).months;
-      if (Array.isArray(inner)) summary += ` nestedArray=${inner.length}`;
-    } else {
-      summary = `status=${j.status} msg=${j.message || j.error || ""}`;
-    }
-  } catch {
-    /* keep text snippet */
-  }
-  console.log(`${res.status} ${path}`);
-  console.log(`  ${summary}`);
-}
-
 async function inspect() {
   const path =
     "/api/mf/holdings-history/scheme-code/122639?startMonth=05-2026&endMonth=07-2026";
