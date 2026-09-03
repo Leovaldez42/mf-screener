@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { LoadingWait } from "@/components/ui";
 import { type CategoryAverage, type SchemeMetric, type SortKey } from "@/lib/scheme-metrics";
 import { formatNumber } from "@/lib/format";
 
@@ -26,6 +27,7 @@ export default function ScreenerPage() {
   const [styleAverage, setStyleAverage] = useState<CategoryAverage | null>(null);
   const [universe, setUniverse] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [q, setQ] = useState("");
   const [style, setStyle] = useState("");
@@ -88,6 +90,7 @@ export default function ScreenerPage() {
 
   useEffect(() => {
     const t = setTimeout(() => {
+      setLoading(true);
       fetch(`/api/v1/schemes?${query}`)
         .then(async (r) => {
           const d = await r.json();
@@ -99,7 +102,8 @@ export default function ScreenerPage() {
           setStyleAverage(d.styleAverage || null);
           setUniverse(typeof d.universe === "number" ? d.universe : null);
         })
-        .catch(() => setError("Could not load schemes"));
+        .catch(() => setError("Could not load schemes"))
+        .finally(() => setLoading(false));
     }, 250);
     return () => clearTimeout(t);
   }, [query]);
@@ -236,7 +240,8 @@ export default function ScreenerPage() {
                 : error}
             </p>
           ) : null}
-          {!error && schemes.length === 0 ? (
+          {!error && loading ? <LoadingWait label="Loading schemes…" /> : null}
+          {!error && !loading && schemes.length === 0 ? (
             <p className="text-sm text-faint">
               No rows yet. After SQL is applied: <code>npm run ingest:metrics</code>
             </p>

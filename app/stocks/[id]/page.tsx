@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Delta, loadWatchlist, saveWatchlist } from "@/components/ui";
+import { Delta, LoadingWait, loadWatchlist, saveWatchlist } from "@/components/ui";
 import { formatMonthLabel, formatNumber } from "@/lib/format";
 
 type Payload = {
@@ -44,7 +44,7 @@ export default function StockPage() {
     saveWatchlist(next);
   }
 
-  if (!data) return <p className="text-sm text-faint">Loading…</p>;
+  if (!data) return <LoadingWait label="Loading stock…" />;
   if (data.error) return <p className="text-sm text-amber-400">{data.error}</p>;
 
   return (

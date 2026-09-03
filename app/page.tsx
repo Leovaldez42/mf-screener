@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { Delta, loadWatchlist, saveWatchlist } from "@/components/ui";
+import { Delta, LoadingWait, loadWatchlist, saveWatchlist } from "@/components/ui";
 import { formatMonthSpan, formatNumber } from "@/lib/format";
 import type { ChaseRow } from "@/lib/types";
 
@@ -36,6 +36,7 @@ export default function ChasePage() {
   const [months, setMonths] = useState<string[]>([]);
   const [sortKey, setSortKey] = useState<SortKey>("net_value_delta_cr");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => setWatch(loadWatchlist()), []);
   useEffect(() => {
@@ -46,18 +47,29 @@ export default function ChasePage() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     const q = new URLSearchParams();
     if (month) q.set("month", month);
     if (sector) q.set("sector", sector);
     if (minFunds !== "0") q.set("min_funds", minFunds);
+    setLoading(true);
     fetch(`/api/v1/chase?${q}`)
       .then(async (r) => {
         const d = await r.json();
+        if (cancelled) return;
         if (!r.ok && r.status !== 503) setError(d.error || "Failed to load");
         else setError(null);
         setRows(d.rows || []);
       })
-      .catch(() => setError("Failed to load"));
+      .catch(() => {
+        if (!cancelled) setError("Failed to load");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [month, sector, minFunds]);
 
   const sectors = useMemo(
@@ -130,7 +142,7 @@ export default function ChasePage() {
       </div>
       {error ? <p className="text-sm text-amber-400">{error}</p> : null}
 
-      {rows.length > 0 ? (
+      {!loading && rows.length > 0 ? (
         <div className="grid gap-3 md:grid-cols-3">
           <div className="rounded border border-border bg-card p-3">
             <div className="text-xs uppercase tracking-[0.12em] text-faint">Biggest inflow</div>
@@ -191,7 +203,9 @@ export default function ChasePage() {
           />
         </label>
       </div>
-      {rows.length === 0 ? (
+      {loading ? (
+        <LoadingWait label="Loading holdings…" />
+      ) : rows.length === 0 ? (
         <p className="text-sm text-faint">
           No rows. Apply the SQL migration in Supabase, set <code>.env.local</code>, then run{" "}
           <code>npm run ingest</code>.

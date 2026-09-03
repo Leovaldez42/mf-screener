@@ -109,6 +109,18 @@ export function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
+export function LoadingWait({ label = "Loading…" }: { label?: string }) {
+  return (
+    <div className="flex items-center gap-3 py-10 text-sm text-muted" role="status" aria-live="polite">
+      <span
+        className="h-4 w-4 shrink-0 rounded-full border-2 border-border border-t-foreground animate-spin"
+        aria-hidden
+      />
+      <span>{label}</span>
+    </div>
+  );
+}
+
 export function Delta({ value }: { value: number }) {
   const cls = value > 0 ? "text-gain" : value < 0 ? "text-loss" : "text-muted";
   const sign = value > 0 ? "+" : "";
