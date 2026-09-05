@@ -40,7 +40,7 @@ html.dark {
   --color-gain: var(--gain);
   --color-loss: var(--loss);
   --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 body {

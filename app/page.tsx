@@ -2,10 +2,9 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { Delta, LoadingWait, loadWatchlist, saveWatchlist } from "@/components/ui";
-import { formatMonthSpan, formatNumber } from "@/lib/format";
-import { loadMonths } from "@/lib/load-months";
+import { formatNumber } from "@/lib/format";
 import { sessionCacheGet, sessionCacheSet } from "@/lib/session-cache";
 import type { ChaseRow } from "@/lib/types";
 
@@ -27,7 +26,36 @@ function sortValue(row: ChaseRow, key: SortKey): string | number {
   return row[key];
 }
 
-export default function ChasePage() {
+function ChaseFallback() {
+  return (
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-xl font-medium">Chase</h1>
+        <p className="mt-1 text-sm text-muted">
+          Active equity funds only. Adds and cuts use share quantity, not weight. Use{" "}
+          <strong>Holdings as of</strong> in the header. Older months may have thinner coverage.
+          Books lag month-end by about ten working days. Click a column header to sort.
+        </p>
+      </div>
+      <div className="grid gap-3 md:grid-cols-3">
+        {["Biggest inflow", "Biggest outflow", "Sector signal"].map((label) => (
+          <div key={label} className="rounded border border-border bg-card p-3">
+            <div className="text-xs uppercase tracking-[0.12em] text-faint">{label}</div>
+            <div className="mt-2 text-base font-medium text-foreground">…</div>
+            <div className="mt-1 text-sm text-muted">…</div>
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-3 text-sm">
+        <span className="inline-block h-8 w-40 rounded border border-border bg-input" />
+        <span className="inline-block h-8 w-32 rounded border border-border bg-input" />
+      </div>
+      <LoadingWait label="Loading holdings…" />
+    </div>
+  );
+}
+
+function ChasePage() {
   const search = useSearchParams();
   const month = search.get("month") || "";
   const [allRows, setAllRows] = useState<ChaseRow[]>([]);
@@ -35,18 +63,12 @@ export default function ChasePage() {
   const [sector, setSector] = useState("");
   const [minFunds, setMinFunds] = useState("0");
   const [watch, setWatch] = useState<string[]>([]);
-  const [months, setMonths] = useState<string[]>([]);
   const [sortKey, setSortKey] = useState<SortKey>("net_value_delta_cr");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     queueMicrotask(() => setWatch(loadWatchlist()));
-  }, []);
-  useEffect(() => {
-    loadMonths()
-      .then(setMonths)
-      .catch(() => setMonths([]));
   }, []);
 
   useEffect(() => {
@@ -162,48 +184,55 @@ export default function ChasePage() {
         <h1 className="text-xl font-medium">Chase</h1>
         <p className="mt-1 text-sm text-muted">
           Active equity funds only. Adds and cuts use share quantity, not weight. Use{" "}
-          <strong>Holdings as of</strong> in the header for {formatMonthSpan(months)}
-          {months.length ? " (older months may have thinner coverage)" : ""}. Books lag month-end by
-          about ten working days. Click a column header to sort.
+          <strong>Holdings as of</strong> in the header. Older months may have thinner coverage.
+          Books lag month-end by about ten working days. Click a column header to sort.
         </p>
       </div>
       {error ? <p className="text-sm text-amber-400">{error}</p> : null}
 
-      {!loading && rows.length > 0 ? (
-        <div className="grid gap-3 md:grid-cols-3">
-          <div className="rounded border border-border bg-card p-3">
-            <div className="text-xs uppercase tracking-[0.12em] text-faint">Biggest inflow</div>
-            <div className="mt-2 text-base font-medium text-foreground">
-              {summary.inflow ? summary.inflow.display_name : "—"}
-            </div>
-            <div className="mt-1 text-sm text-gain">
-              {summary.inflow ? `+${formatNumber(summary.inflow.net_value_delta_cr, 1)} ₹ cr` : "No positive movers"}
-            </div>
+      <div className="grid gap-3 md:grid-cols-3">
+        <div className="rounded border border-border bg-card p-3">
+          <div className="text-xs uppercase tracking-[0.12em] text-faint">Biggest inflow</div>
+          <div className="mt-2 text-base font-medium text-foreground">
+            {loading ? "…" : summary.inflow ? summary.inflow.display_name : "—"}
           </div>
-
-          <div className="rounded border border-border bg-card p-3">
-            <div className="text-xs uppercase tracking-[0.12em] text-faint">Biggest outflow</div>
-            <div className="mt-2 text-base font-medium text-foreground">
-              {summary.outflow ? summary.outflow.display_name : "—"}
-            </div>
-            <div className="mt-1 text-sm text-loss">
-              {summary.outflow ? `${formatNumber(summary.outflow.net_value_delta_cr, 1)} ₹ cr` : "No negative movers"}
-            </div>
-          </div>
-
-          <div className="rounded border border-border bg-card p-3">
-            <div className="text-xs uppercase tracking-[0.12em] text-faint">Sector signal</div>
-            <div className="mt-2 text-base font-medium text-foreground">
-              {summary.leadingSector ? summary.leadingSector.name : "—"}
-            </div>
-            <div className="mt-1 text-sm text-muted">
-              {summary.leadingSector
-                ? `${summary.leadingSector.value > 0 ? "Net inflow" : "Net outflow"}: ${formatNumber(Math.abs(summary.leadingSector.value), 1)} ₹ cr`
-                : "No sector signal"}
-            </div>
+          <div className="mt-1 text-sm text-gain">
+            {loading
+              ? "…"
+              : summary.inflow
+                ? `+${formatNumber(summary.inflow.net_value_delta_cr, 1)} ₹ cr`
+                : "No positive movers"}
           </div>
         </div>
-      ) : null}
+
+        <div className="rounded border border-border bg-card p-3">
+          <div className="text-xs uppercase tracking-[0.12em] text-faint">Biggest outflow</div>
+          <div className="mt-2 text-base font-medium text-foreground">
+            {loading ? "…" : summary.outflow ? summary.outflow.display_name : "—"}
+          </div>
+          <div className="mt-1 text-sm text-loss">
+            {loading
+              ? "…"
+              : summary.outflow
+                ? `${formatNumber(summary.outflow.net_value_delta_cr, 1)} ₹ cr`
+                : "No negative movers"}
+          </div>
+        </div>
+
+        <div className="rounded border border-border bg-card p-3">
+          <div className="text-xs uppercase tracking-[0.12em] text-faint">Sector signal</div>
+          <div className="mt-2 text-base font-medium text-foreground">
+            {loading ? "…" : summary.leadingSector ? summary.leadingSector.name : "—"}
+          </div>
+          <div className="mt-1 text-sm text-muted">
+            {loading
+              ? "…"
+              : summary.leadingSector
+                ? `${summary.leadingSector.value > 0 ? "Net inflow" : "Net outflow"}: ${formatNumber(Math.abs(summary.leadingSector.value), 1)} ₹ cr`
+                : "No sector signal"}
+          </div>
+        </div>
+      </div>
 
       <div className="flex flex-wrap gap-3 text-sm">
         <label className="flex items-center gap-2">
@@ -299,5 +328,13 @@ export default function ChasePage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ChaseRoute() {
+  return (
+    <Suspense fallback={<ChaseFallback />}>
+      <ChasePage />
+    </Suspense>
   );
 }

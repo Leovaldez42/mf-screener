@@ -113,7 +113,14 @@ function WatchlistInner() {
 
 export default function WatchlistPage() {
   return (
-    <Suspense fallback={<p className="text-sm text-faint">Loading…</p>}>
+    <Suspense
+      fallback={
+        <div className="space-y-4">
+          <h1 className="text-xl font-medium">Watchlist</h1>
+          <LoadingWait label="Loading watchlist…" />
+        </div>
+      }
+    >
       <WatchlistInner />
     </Suspense>
   );

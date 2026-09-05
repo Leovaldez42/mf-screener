@@ -38,9 +38,7 @@ export function ThemeToggle() {
 
   useEffect(() => {
     queueMicrotask(() => {
-      const next = readTheme();
-      setTheme(next);
-      paint(next);
+      setTheme(readTheme());
     });
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const onChange = () => {
@@ -66,7 +64,7 @@ export function ThemeToggle() {
   return (
     <button
       type="button"
-      className="rounded border border-border px-2 py-1 text-xs text-muted hover:text-foreground"
+      className="w-12 rounded border border-border px-2 py-1 text-xs text-muted hover:text-foreground"
       onClick={toggle}
       aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
     >
