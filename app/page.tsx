@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { Delta, LoadingWait, loadWatchlist, saveWatchlist } from "@/components/ui";
-import { formatNumber } from "@/lib/format";
+import { formatNumber, sectorLabel } from "@/lib/format";
 import { sessionCacheGet, sessionCacheSet } from "@/lib/session-cache";
 import type { ChaseRow } from "@/lib/types";
 
@@ -21,7 +21,7 @@ const COLUMNS: { key: SortKey; label: string; hide: string; sticky?: boolean }[]
 
 function sortValue(row: ChaseRow, key: SortKey): string | number {
   if (key === "display_name") return row.display_name.toLowerCase();
-  if (key === "sector") return (row.sector || "").toLowerCase();
+  if (key === "sector") return sectorLabel(row.sector).toLowerCase();
   if (key === "median_weight_pct") return row.median_weight_pct ?? Number.NEGATIVE_INFINITY;
   return row[key];
 }
@@ -115,14 +115,14 @@ function ChasePage() {
   const rows = useMemo(() => {
     const min = Number(minFunds) || 0;
     return allRows.filter((r) => {
-      if (sector && (r.sector || "").toLowerCase() !== sector.toLowerCase()) return false;
+      if (sector && sectorLabel(r.sector).toLowerCase() !== sector.toLowerCase()) return false;
       if (min > 0 && r.fund_count < min) return false;
       return true;
     });
   }, [allRows, sector, minFunds]);
 
   const sectors = useMemo(
-    () => [...new Set(allRows.map((r) => r.sector).filter(Boolean))] as string[],
+    () => [...new Set(allRows.map((r) => sectorLabel(r.sector)))].sort((a, b) => a.localeCompare(b, "en-IN")),
     [allRows]
   );
 
@@ -150,7 +150,7 @@ function ChasePage() {
 
     const sectorTotals = new Map<string, number>();
     rows.forEach((r) => {
-      const key = r.sector || "Unassigned";
+      const key = sectorLabel(r.sector);
       sectorTotals.set(key, (sectorTotals.get(key) ?? 0) + r.net_value_delta_cr);
     });
 
@@ -303,7 +303,7 @@ function ChasePage() {
                       {r.display_name}
                     </Link>
                   </td>
-                  <td className="hidden py-2 pr-3 text-muted sm:table-cell">{r.sector || "—"}</td>
+                  <td className="hidden py-2 pr-3 text-muted sm:table-cell">{sectorLabel(r.sector)}</td>
                   <td className="py-2 pr-3">{r.fund_count}</td>
                   <td className="hidden py-2 pr-3 md:table-cell">
                     <Delta value={r.net_qty_delta} />
