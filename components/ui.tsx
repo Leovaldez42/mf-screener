@@ -60,7 +60,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <header className="border-b border-border bg-card">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3">
+        <div className="mx-auto flex w-full max-w-screen-2xl flex-wrap items-center gap-3 px-4 py-3 lg:px-6">
           <Link href="/" className="font-medium tracking-tight">
             MF Chase
           </Link>
@@ -113,7 +113,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           )}
         </div>
       </header>
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6">{children}</main>
+      <main className="mx-auto w-full max-w-screen-2xl flex-1 px-4 py-6 lg:px-6">{children}</main>
     </div>
   );
 }
