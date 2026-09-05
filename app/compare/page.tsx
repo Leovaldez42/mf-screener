@@ -214,7 +214,14 @@ function CompareInner() {
 
 export default function ComparePage() {
   return (
-    <Suspense fallback={<p className="text-sm text-faint">Loading…</p>}>
+    <Suspense
+      fallback={
+        <div className="space-y-4">
+          <h1 className="text-xl font-medium">Compare funds</h1>
+          <p className="text-sm text-muted">Search and add Direct Growth schemes.</p>
+        </div>
+      }
+    >
       <CompareInner />
     </Suspense>
   );

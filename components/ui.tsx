@@ -2,22 +2,25 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { ThemeToggle } from "@/components/theme";
 import { formatMonthLabel } from "@/lib/format";
 import { loadMonths } from "@/lib/load-months";
 
-export function Shell({ children }: { children: React.ReactNode }) {
+function MonthSelectFallback() {
+  return (
+    <div className="flex h-8 w-full items-center gap-2 text-sm md:ml-auto md:w-auto">
+      <span className="text-faint">Holdings as of</span>
+      <span className="inline-block h-8 min-w-[11rem] flex-1 rounded border border-border bg-input md:flex-none" />
+    </div>
+  );
+}
+
+function MonthSelect() {
   const pathname = usePathname();
   const search = useSearchParams();
   const router = useRouter();
   const [months, setMonths] = useState<string[]>([]);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [menuPath, setMenuPath] = useState(pathname);
-  if (pathname !== menuPath) {
-    setMenuPath(pathname);
-    setMenuOpen(false);
-  }
   const month = search.get("month") || months[0] || "";
 
   useEffect(() => {
@@ -32,6 +35,34 @@ export function Shell({ children }: { children: React.ReactNode }) {
     else params.delete("month");
     const q = params.toString();
     router.push(`${pathname}${q ? `?${q}` : ""}`);
+  }
+
+  return (
+    <div className="flex h-8 w-full items-center gap-2 text-sm md:ml-auto md:w-auto">
+      <span className="text-faint">Holdings as of</span>
+      <select
+        className="h-8 min-w-0 flex-1 rounded border border-border bg-input px-2 py-1 md:flex-none"
+        value={month}
+        onChange={(e) => setMonth(e.target.value)}
+      >
+        {months.length === 0 ? <option value="">No data</option> : null}
+        {months.map((m) => (
+          <option key={m} value={m}>
+            {formatMonthLabel(m)}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+export function Shell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPath, setMenuPath] = useState(pathname);
+  if (pathname !== menuPath) {
+    setMenuPath(pathname);
+    setMenuOpen(false);
   }
 
   const nav = [
@@ -60,7 +91,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <header className="border-b border-border bg-card">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3">
+        <div className="mx-auto flex w-full max-w-screen-2xl flex-wrap items-center gap-3 px-4 py-3 lg:px-6">
           <Link href="/" className="font-medium tracking-tight">
             MF Chase
           </Link>
@@ -93,27 +124,15 @@ export function Shell({ children }: { children: React.ReactNode }) {
             ))}
           </nav>
           {showMonth ? (
-            <div className="flex w-full items-center gap-2 text-sm md:ml-auto md:w-auto">
-              <span className="text-faint">Holdings as of</span>
-              <select
-                className="min-w-0 flex-1 rounded border border-border bg-input px-2 py-1 md:flex-none"
-                value={month}
-                onChange={(e) => setMonth(e.target.value)}
-              >
-                {months.length === 0 ? <option value="">No data</option> : null}
-                {months.map((m) => (
-                  <option key={m} value={m}>
-                    {formatMonthLabel(m)}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <Suspense fallback={<MonthSelectFallback />}>
+              <MonthSelect />
+            </Suspense>
           ) : (
-            <div className="hidden md:ml-auto md:block" />
+            <div className="hidden h-8 md:ml-auto md:block" />
           )}
         </div>
       </header>
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6">{children}</main>
+      <main className="mx-auto w-full max-w-screen-2xl flex-1 px-4 py-6 lg:px-6">{children}</main>
     </div>
   );
 }

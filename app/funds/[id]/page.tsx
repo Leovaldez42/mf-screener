@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { Delta } from "@/components/ui";
 import { formatNumber } from "@/lib/format";
 import { sessionCacheGet, sessionCacheSet } from "@/lib/session-cache";
@@ -26,7 +26,7 @@ type Payload = {
   empty?: boolean;
 };
 
-export default function FundPage() {
+function FundPage() {
   const { id } = useParams<{ id: string }>();
   const search = useSearchParams();
   const month = search.get("month") || "";
@@ -123,5 +123,13 @@ export default function FundPage() {
         </table>
       </div>
     </div>
+  );
+}
+
+export default function FundRoute() {
+  return (
+    <Suspense fallback={<p className="text-sm text-faint">Loading…</p>}>
+      <FundPage />
+    </Suspense>
   );
 }

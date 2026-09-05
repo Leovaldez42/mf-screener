@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { Delta, LoadingWait, loadWatchlist, saveWatchlist } from "@/components/ui";
 import { formatMonthLabel, formatNumber } from "@/lib/format";
 import { sessionCacheGet, sessionCacheSet } from "@/lib/session-cache";
@@ -23,7 +23,7 @@ type Payload = {
   error?: string;
 };
 
-export default function StockPage() {
+function StockPage() {
   const { id } = useParams<{ id: string }>();
   const search = useSearchParams();
   const month = search.get("month") || "";
@@ -117,5 +117,13 @@ export default function StockPage() {
         </table>
       </div>
     </div>
+  );
+}
+
+export default function StockRoute() {
+  return (
+    <Suspense fallback={<LoadingWait label="Loading stock…" />}>
+      <StockPage />
+    </Suspense>
   );
 }

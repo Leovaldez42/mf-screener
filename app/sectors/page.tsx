@@ -1,13 +1,13 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { Delta, LoadingWait } from "@/components/ui";
 import { sessionCacheGet, sessionCacheSet } from "@/lib/session-cache";
 
 type Row = { sector: string; net_value_delta_cr: number; net_qty_delta: number };
 
-export default function SectorsPage() {
+function SectorsPage() {
   const search = useSearchParams();
   const month = search.get("month") || "";
   const [rows, setRows] = useState<Row[]>([]);
@@ -95,5 +95,23 @@ export default function SectorsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function SectorsRoute() {
+  return (
+    <Suspense
+      fallback={
+        <div className="space-y-4">
+          <h1 className="text-xl font-medium">Sectors</h1>
+          <p className="text-sm text-muted">
+            Net qty is the sum of share changes. Net ₹ cr is the change in disclosed market value.
+          </p>
+          <LoadingWait label="Loading sector totals…" />
+        </div>
+      }
+    >
+      <SectorsPage />
+    </Suspense>
   );
 }
