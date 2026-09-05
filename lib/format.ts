@@ -20,6 +20,12 @@ export function formatMonthSpan(months: string[]): string {
   return `${a} ${y1}–${b} ${y2}`;
 }
 
+/** Empty / missing industry labels from the AMC book. Matches Sectors rollup. */
+export function sectorLabel(sector: string | null | undefined): string {
+  const s = (sector || "").trim();
+  return s || "Unknown";
+}
+
 export function formatNumber(n: number | null | undefined, digits = 2): string {
   if (n === null || n === undefined || Number.isNaN(n)) return "—";
   return n.toLocaleString("en-IN", {
