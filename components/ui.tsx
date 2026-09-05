@@ -11,7 +11,7 @@ function MonthSelectFallback() {
   return (
     <div className="flex h-8 w-full items-center gap-2 text-sm md:ml-auto md:w-auto">
       <span className="text-faint">Holdings as of</span>
-      <span className="inline-block h-8 min-w-[11rem] flex-1 rounded border border-border bg-input md:flex-none" />
+      <span className="inline-block h-8 min-w-44 flex-1 rounded border border-border bg-input md:flex-none" />
     </div>
   );
 }
