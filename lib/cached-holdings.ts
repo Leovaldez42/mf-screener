@@ -175,7 +175,7 @@ async function loadFundPayload(familyId: number, requestedMonth: string) {
   if (!family) {
     return {
       error: "no_holdings" as const,
-      message: "This scheme is not in the Chase holdings universe (top funds by AUM).",
+      message: "This scheme is not in the holdings universe (top funds by AUM).",
     };
   }
 

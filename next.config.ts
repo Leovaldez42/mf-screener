@@ -5,6 +5,9 @@ const emptyPolyfill = path.join(__dirname, "lib/empty-polyfill.js");
 
 const nextConfig: NextConfig = {
   devIndicators: false,
+  async redirects() {
+    return [{ source: "/chase", destination: "/adds-cuts", permanent: true }];
+  },
   experimental: {
     // Tailwind CSS is small; inlining it removes the extra render-blocking stylesheet request.
     inlineCss: true,

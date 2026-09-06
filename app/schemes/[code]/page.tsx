@@ -88,7 +88,7 @@ export default function SchemePage() {
       </div>
       <p className="text-sm text-faint">
         <Link className="underline" href={`/funds/${scheme.scheme_code}`}>
-          Holdings / Chase book
+          Holdings book
         </Link>
         {" — "}
         available for every Direct Growth active-equity scheme after holdings ingest.
