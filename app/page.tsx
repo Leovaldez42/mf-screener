@@ -2,11 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getChaseRows, resolveHoldingsMonth } from "@/lib/cached-holdings";
 import { formatMonthLabel, formatNumber, sectorLabel } from "@/lib/format";
-import { HOLDINGS_REVALIDATE_SEC } from "@/lib/http-cache";
 import { supabaseConfigured } from "@/lib/supabase";
 import type { ChaseRow } from "@/lib/types";
 
-export const revalidate = HOLDINGS_REVALIDATE_SEC;
+export const revalidate = 300;
 
 export const metadata: Metadata = {
   title: "MF Chase",
