@@ -66,7 +66,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   }
 
   const nav = [
-    { href: "/", label: "Chase" },
+    { href: "/adds-cuts", label: "Adds & cuts" },
     { href: "/screener", label: "Screener" },
     { href: "/compare", label: "Compare" },
     { href: "/sectors", label: "Sectors" },
@@ -74,7 +74,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     { href: "/about", label: "About" },
   ];
   const showMonth =
-    pathname === "/" ||
+    pathname === "/adds-cuts" ||
     pathname.startsWith("/stocks/") ||
     pathname.startsWith("/funds/") ||
     pathname === "/sectors" ||

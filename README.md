@@ -6,7 +6,7 @@ Not a Groww/Value Research clone. Not investment advice.
 
 ## What v1 does
 
-- **Chase:** monthly books — what funds added or cut (share quantity), crowding, sector rollups
+- **Adds & cuts:** monthly books — what funds added or cut (share quantity), crowding, sector rollups
 - **Screener / Compare:** Direct Growth active-equity schemes, filter by fund house, Sharpe, PE, expense ratio, returns
 - Holdings ingest uses **FinAPI Pro** (server-side only): all Direct Growth active-equity schemes in `scheme_metrics`, monthly books
 - Screener / Compare metrics also from FinAPI
@@ -33,13 +33,13 @@ npm run ingest           # FinAPI → holdings for every screener scheme, 12 mon
 npm run dev              # http://localhost:3000
 ```
 
-Open **Screener**, filter by category / house / Sharpe / PE / TER / returns. When a category is selected, a single equal-weight peer average strip appears at the top. Open a scheme page for the same averages vs that fund (including PE). Compare from **Compare**. Watchlist is browser-local. The browser never calls FinAPI.
+Open **Adds & cuts** for monthly fund buys and sells. Open **Screener**, filter by category / house / Sharpe / PE / TER / returns. When a category is selected, a single equal-weight peer average strip appears at the top. Open a scheme page for the same averages vs that fund (including PE). Compare from **Compare**. Watchlist is browser-local. The browser never calls FinAPI.
 
 Ingest status for operators is at `/data` (not in the nav).
 
 Default holdings ingest is **all** Direct Growth active-equity schemes in `scheme_metrics` (`INGEST_HOLDINGS_LIMIT=0`) and **12 months**. Already-ingested funds are skipped unless `INGEST_HOLDINGS_SKIP_EXISTING=0`. Requires `ingest:metrics` first. The old mfdata worker is `npm run ingest:mfdata`.
 
-Months in the Chase dropdown are whatever exists in Supabase snapshots/aggregates. If FinAPI has no older books, a retry will not invent them.
+Months in the Holdings as of dropdown are whatever exists in Supabase snapshots/aggregates. If FinAPI has no older books, a retry will not invent them.
 
 ## Deploy later
 

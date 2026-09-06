@@ -8,7 +8,7 @@ export default function AboutPage() {
         Sharpe, TER, and returns. It is not investment advice.
       </p>
       <p>
-        Holdings are published about <strong>ten working days after month-end</strong>. Until then, Chase
+        Holdings are published about <strong>ten working days after month-end</strong>. Until then the table
         uses the last complete book — an empty month is not treated as funds selling everything.
       </p>
       <p>
@@ -18,7 +18,7 @@ export default function AboutPage() {
       </p>
       <p>
         v1 has no login. Watchlists stay in <code>localStorage</code>. Auth can be added later without changing
-        Chase. The JSON under <code>/api/v1</code> is meant for a future mobile client.
+        the holdings views. The JSON under <code>/api/v1</code> is meant for a future mobile client.
       </p>
       <p>
         Licensed under{" "}
