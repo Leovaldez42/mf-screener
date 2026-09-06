@@ -47,7 +47,7 @@ function WatchlistInner() {
     <div className="space-y-4">
       <div>
         <h1 className="text-xl font-medium">Watchlist</h1>
-        <p className="text-sm text-muted">Saved in this browser. Add names with Watch on Chase or a stock page.</p>
+        <p className="text-sm text-muted">Saved in this browser. Add names with Watch on Adds & cuts or a stock page.</p>
       </div>
       {error ? <p className="text-sm text-amber-400">{error}</p> : null}
       {ids === null ? (
@@ -55,8 +55,8 @@ function WatchlistInner() {
       ) : ids.length === 0 ? (
         <p className="text-sm text-faint">
           Empty. Open{" "}
-          <Link className="underline" href="/">
-            Chase
+          <Link className="underline" href="/adds-cuts">
+            Adds & cuts
           </Link>{" "}
           and tap Watch on a stock.
         </p>

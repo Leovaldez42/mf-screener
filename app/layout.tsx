@@ -16,7 +16,8 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: "MF Chase",
-  description: "Holdings chase plus fund screener and compare for Indian active-equity MFs.",
+  description:
+    "See what Indian active-equity mutual funds bought and sold last month. Adds and cuts, fund screener, and compare. Not investment advice.",
   icons: {
     icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
     apple: [{ url: "/apple-icon.png" }],
