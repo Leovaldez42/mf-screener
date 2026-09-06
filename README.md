@@ -1,19 +1,19 @@
 # MF Chase
 
-Source-available research cockpit for **monthly active-equity Indian mutual fund holdings**, plus a **fund screener and compare** (house, Sharpe, TER, CAGR).
+Research tool for **Indian active-equity mutual funds**: monthly adds and cuts (by share count), plus a fund screener and compare.
 
-Not a Groww/Value Research clone. Not investment advice.
+Not a broker. Not investment advice. Index funds, ETFs, gold, and debt are skipped.
 
-## What v1 does
+## Product
 
-- **Adds & cuts:** monthly books — what funds added or cut (share quantity), crowding, sector rollups
-- **Screener / Compare:** Direct Growth active-equity schemes, filter by fund house, Sharpe, PE, expense ratio, returns
-- Holdings ingest uses **FinAPI Pro** (server-side only): all Direct Growth active-equity schemes in `scheme_metrics`, monthly books
-- Screener / Compare metrics also from FinAPI
-- Localhost web UI + JSON at `/api/v1` (for a future mobile app)
-- **No login.** Watchlist and compare selection are `localStorage`
+- **`/`** — landing
+- **Adds & cuts** (`/adds-cuts`) — what funds bought more of or sold between monthly books. `/chase` redirects here.
+- **Screener / Compare** — Direct Growth plans; filter and compare by house, Sharpe, PE, TER, CAGR
+- **Sectors / Watchlist / About**
+- Holdings land about **ten working days after month-end**. Until then the table shows the last complete book. Adds and cuts are shares, not weight.
+- **No login.** Watchlist and compare selection stay in `localStorage`. The browser never calls FinAPI.
 
-Holdings land about **ten working days after month-end**. Metrics refresh can run more often than holdings.
+JSON for the UI (and anything else) is under `/api/v1`. Holdings rows are still `GET /api/v1/chase`.
 
 ## Setup
 
@@ -22,28 +22,25 @@ Holdings land about **ten working days after month-end**. Metrics refresh can ru
    - [`supabase/migrations/20260829000000_init.sql`](supabase/migrations/20260829000000_init.sql)
    - [`supabase/migrations/20260829010000_scheme_metrics.sql`](supabase/migrations/20260829010000_scheme_metrics.sql)
    - [`supabase/migrations/20260903000000_scheme_metrics_pe.sql`](supabase/migrations/20260903000000_scheme_metrics_pe.sql) (adds `pe`; existing projects only need this file)
-3. Copy [`.env.example`](.env.example) to `.env.local` and fill keys (including `FINAPI_API_KEY` for metrics).
+3. Copy [`.env.example`](.env.example) to `.env.local` and fill keys (including `FINAPI_API_KEY`).
 4. Install and run:
 
 ```bash
-cd ~/dev/mf-chase
 npm install
 npm run ingest:metrics   # FinAPI → scheme_metrics (screener)
 npm run ingest           # FinAPI → holdings for every screener scheme, 12 months
 npm run dev              # http://localhost:3000
 ```
 
-Open **Adds & cuts** for monthly fund buys and sells. Open **Screener**, filter by category / house / Sharpe / PE / TER / returns. When a category is selected, a single equal-weight peer average strip appears at the top. Open a scheme page for the same averages vs that fund (including PE). Compare from **Compare**. Watchlist is browser-local. The browser never calls FinAPI.
-
-Ingest status for operators is at `/data` (not in the nav).
-
 Default holdings ingest is **all** Direct Growth active-equity schemes in `scheme_metrics` (`INGEST_HOLDINGS_LIMIT=0`) and **12 months**. Already-ingested funds are skipped unless `INGEST_HOLDINGS_SKIP_EXISTING=0`. Requires `ingest:metrics` first. The old mfdata worker is `npm run ingest:mfdata`.
 
 Months in the Holdings as of dropdown are whatever exists in Supabase snapshots/aggregates. If FinAPI has no older books, a retry will not invent them.
 
-## Deploy later
+Ingest status for operators is at `/data` (not in the nav).
 
-Same app on Vercel + hosted Supabase. Set the same env vars. Point a Flutter/RN client at `/api/v1`.
+## Deploy
+
+Same app on Vercel + hosted Supabase. Set the same env vars.
 
 ## License
 

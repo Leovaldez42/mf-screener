@@ -88,9 +88,9 @@ export default async function LandingPage() {
           See what Indian active-equity funds bought and sold last month.
         </h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">
-          MF Chase is a research view of monthly portfolio books — not price charts, not a broker.
-          Adds and cuts use <strong className="font-medium text-foreground">share quantity</strong>, not
-          weight, so a name rising because the price moved is not treated as a buy.
+          This is a research tool, not a broker. It shows stocks that funds bought more of or sold,
+          counted in <strong className="font-medium text-foreground">shares</strong> — a price bounce
+          with no extra buying does not show up as a buy.
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
           <Link
@@ -169,8 +169,7 @@ export default async function LandingPage() {
         <ul className="mt-3 max-w-2xl space-y-3 text-sm leading-6 text-muted">
           <li>
             Books land about <strong className="font-medium text-foreground">ten working days</strong> after
-            month-end. Until then the table uses the last complete book — an empty new month is not treated as
-            funds selling everything.
+            month-end. Until then the table shows the last complete book.
           </li>
           <li>
             <strong className="font-medium text-foreground">Quantity, not weight.</strong> A stock can rise
