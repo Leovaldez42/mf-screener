@@ -47,8 +47,9 @@ function ChaseFallback() {
         ))}
       </div>
       <div className="flex flex-wrap gap-3 text-sm">
-        <span className="inline-block h-8 w-40 rounded border border-border bg-input" />
+        <span className="inline-block h-8 w-36 rounded border border-border bg-input" />
         <span className="inline-block h-8 w-32 rounded border border-border bg-input" />
+        <span className="inline-block h-8 w-48 rounded border border-border bg-input" />
       </div>
       <LoadingWait label="Loading holdings…" />
     </div>
@@ -62,6 +63,8 @@ function ChasePage() {
   const [error, setError] = useState<string | null>(null);
   const [sector, setSector] = useState("");
   const [minFunds, setMinFunds] = useState("0");
+  const [stockQ, setStockQ] = useState("");
+  const [showTop, setShowTop] = useState(false);
   const [watch, setWatch] = useState<string[]>([]);
   const [sortKey, setSortKey] = useState<SortKey>("net_value_delta_cr");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
@@ -69,6 +72,15 @@ function ChasePage() {
 
   useEffect(() => {
     queueMicrotask(() => setWatch(loadWatchlist()));
+  }, []);
+
+  useEffect(() => {
+    function onScroll() {
+      setShowTop(window.scrollY > 500);
+    }
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   useEffect(() => {
@@ -121,13 +133,21 @@ function ChasePage() {
     });
   }, [allRows, sector, minFunds]);
 
+  const tableRows = useMemo(() => {
+    const q = stockQ.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(
+      (r) => r.display_name.toLowerCase().includes(q) || r.stock_id.toLowerCase().includes(q)
+    );
+  }, [rows, stockQ]);
+
   const sectors = useMemo(
     () => [...new Set(allRows.map((r) => sectorLabel(r.sector)))].sort((a, b) => a.localeCompare(b, "en-IN")),
     [allRows]
   );
 
   const sortedRows = useMemo(() => {
-    const next = [...rows];
+    const next = [...tableRows];
     next.sort((a, b) => {
       const av = sortValue(a, sortKey);
       const bv = sortValue(b, sortKey);
@@ -137,7 +157,7 @@ function ChasePage() {
       return sortOrder === "desc" ? -cmp : cmp;
     });
     return next;
-  }, [rows, sortKey, sortOrder]);
+  }, [tableRows, sortKey, sortOrder]);
 
   const summary = useMemo(() => {
     const biggestInflows = [...rows]
@@ -238,7 +258,7 @@ function ChasePage() {
         <label className="flex items-center gap-2">
           Sector
           <select
-            className="rounded border border-border bg-input px-2 py-1"
+            className="w-36 rounded border border-border bg-input px-2 py-1"
             value={sector}
             onChange={(e) => setSector(e.target.value)}
           >
@@ -258,6 +278,17 @@ function ChasePage() {
             onChange={(e) => setMinFunds(e.target.value)}
           />
         </label>
+        <label className="flex items-center gap-2">
+          Stock
+          <input
+            type="search"
+            className="w-48 rounded border border-border bg-input px-2 py-1"
+            value={stockQ}
+            onChange={(e) => setStockQ(e.target.value)}
+            placeholder="Name"
+            autoComplete="off"
+          />
+        </label>
       </div>
       {loading ? (
         <LoadingWait label="Loading holdings…" />
@@ -266,7 +297,7 @@ function ChasePage() {
           No rows. Apply the SQL migration in Supabase, set <code>.env.local</code>, then run{" "}
           <code>npm run ingest</code>.
         </p>
-      ) : rows.length === 0 ? (
+      ) : tableRows.length === 0 ? (
         <p className="text-sm text-faint">No stocks match these filters.</p>
       ) : (
         <div className="overflow-x-auto">
@@ -327,6 +358,18 @@ function ChasePage() {
           </table>
         </div>
       )}
+      {showTop ? (
+        <button
+          type="button"
+          className="fixed right-4 bottom-6 z-40 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted shadow-sm hover:text-foreground"
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          aria-label="Back to top"
+        >
+          <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+            <path d="M3 10.5 8 5.5l5 5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      ) : null}
     </div>
   );
 }
