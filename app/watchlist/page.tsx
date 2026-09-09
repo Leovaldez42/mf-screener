@@ -2,17 +2,38 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
-import { Delta, LoadingWait, loadWatchlist, saveWatchlist } from "@/components/ui";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { LoadError, TableSkeleton, UpdatingNote } from "@/components/load-ui";
+import { Delta, loadWatchlist, saveWatchlist } from "@/components/ui";
 import type { ChaseRow } from "@/lib/types";
+
+const COLS = [
+  { label: "Stock" },
+  { label: "Sector", hide: "hidden sm:table-cell" },
+  { label: "Funds" },
+  { label: "Net ₹ cr" },
+  { label: "" },
+];
+
+function WatchlistFallback() {
+  return (
+    <div className="space-y-4">
+      <h1 className="text-xl font-medium">Watchlist</h1>
+      <TableSkeleton columns={COLS} rows={6} />
+    </div>
+  );
+}
 
 function WatchlistInner() {
   const search = useSearchParams();
   const month = search.get("month") || "";
   const [rows, setRows] = useState<ChaseRow[]>([]);
   const [ids, setIds] = useState<string[] | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
+  const hasRows = useRef(false);
 
   useEffect(() => {
     queueMicrotask(() => setIds(loadWatchlist()));
@@ -20,22 +41,45 @@ function WatchlistInner() {
 
   useEffect(() => {
     if (ids === null) return;
-    if (ids.length === 0) return;
-    queueMicrotask(() => setLoaded(false));
+    if (ids.length === 0) {
+      queueMicrotask(() => {
+        setRows([]);
+        hasRows.current = false;
+        setLoading(false);
+        setUpdating(false);
+        setError(null);
+      });
+      return;
+    }
+    let cancelled = false;
+    if (hasRows.current) setUpdating(true);
+    else setLoading(true);
     const q = new URLSearchParams();
     q.set("ids", ids.join(","));
     if (month) q.set("month", month);
     fetch(`/api/v1/chase?${q}`)
       .then(async (r) => {
         const d = await r.json();
+        if (cancelled) return;
         if (!r.ok && r.status !== 503) setError(d.error || "Could not load watchlist");
         else setError(null);
         const byId = new Map<string, ChaseRow>((d.rows || []).map((row: ChaseRow) => [row.stock_id, row]));
-        setRows(ids.map((id) => byId.get(id)).filter((row): row is ChaseRow => Boolean(row)));
+        const next = ids.map((id) => byId.get(id)).filter((row): row is ChaseRow => Boolean(row));
+        setRows(next);
+        hasRows.current = next.length > 0;
       })
-      .catch(() => setError("Could not load watchlist"))
-      .finally(() => setLoaded(true));
-  }, [month, ids]);
+      .catch(() => {
+        if (!cancelled && !hasRows.current) setError("Could not load watchlist");
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoading(false);
+        setUpdating(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [month, ids, reload]);
 
   function remove(id: string) {
     const next = (ids || []).filter((x) => x !== id);
@@ -45,13 +89,16 @@ function WatchlistInner() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-medium">Watchlist</h1>
-        <p className="text-sm text-muted">Saved in this browser. Add names with Watch on Adds & cuts or a stock page.</p>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-medium">Watchlist</h1>
+          <p className="text-sm text-muted">Saved in this browser. Add names with Watch on Adds & cuts or a stock page.</p>
+        </div>
+        {updating ? <UpdatingNote /> : null}
       </div>
-      {error ? <p className="text-sm text-amber-400">{error}</p> : null}
-      {ids === null ? (
-        <LoadingWait label="Loading watchlist…" />
+      {error ? <LoadError message={error} onRetry={() => setReload((n) => n + 1)} /> : null}
+      {ids === null || (ids.length > 0 && loading && rows.length === 0) ? (
+        <TableSkeleton columns={COLS} rows={6} />
       ) : ids.length === 0 ? (
         <p className="text-sm text-faint">
           Empty. Open{" "}
@@ -60,9 +107,7 @@ function WatchlistInner() {
           </Link>{" "}
           and tap Watch on a stock.
         </p>
-      ) : rows.length === 0 && !loaded ? (
-        <LoadingWait label="Loading watchlist…" />
-      ) : rows.length === 0 ? (
+      ) : error && rows.length === 0 ? null : rows.length === 0 ? (
         <p className="text-sm text-faint">Saved names could not be loaded for this month.</p>
       ) : (
         <div className="overflow-x-auto">
@@ -113,14 +158,7 @@ function WatchlistInner() {
 
 export default function WatchlistPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="space-y-4">
-          <h1 className="text-xl font-medium">Watchlist</h1>
-          <LoadingWait label="Loading watchlist…" />
-        </div>
-      }
-    >
+    <Suspense fallback={<WatchlistFallback />}>
       <WatchlistInner />
     </Suspense>
   );
