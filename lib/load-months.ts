@@ -4,19 +4,25 @@ const KEY = "months";
 
 let inflight: Promise<string[]> | null = null;
 
+export function peekMonths(): string[] {
+  return sessionCacheGet<string[]>(KEY) ?? [];
+}
+
 export function loadMonths(): Promise<string[]> {
-  const hit = sessionCacheGet<string[]>(KEY);
-  if (hit) return Promise.resolve(hit);
-  if (inflight) return inflight;
-  inflight = fetch("/api/v1/months")
-    .then((r) => r.json())
-    .then((d) => {
-      const months = (d.months || []) as string[];
-      sessionCacheSet(KEY, months);
-      return months;
-    })
-    .finally(() => {
-      inflight = null;
-    });
+  const hit = peekMonths();
+  if (!inflight) {
+    inflight = fetch("/api/v1/months")
+      .then((r) => r.json())
+      .then((d) => {
+        const months = (d.months || []) as string[];
+        if (months.length) sessionCacheSet(KEY, months);
+        return months.length ? months : peekMonths();
+      })
+      .catch(() => peekMonths())
+      .finally(() => {
+        inflight = null;
+      });
+  }
+  if (hit.length) return Promise.resolve(hit);
   return inflight;
 }

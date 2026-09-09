@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
-import { Delta, LoadingWait, loadWatchlist, saveWatchlist } from "@/components/ui";
+import { Suspense, useEffect, useLayoutEffect, useState } from "react";
+import { LoadError, Skeleton, TableSkeleton, UpdatingNote } from "@/components/load-ui";
+import { Delta, loadWatchlist, saveWatchlist } from "@/components/ui";
 import { formatMonthLabel, formatNumber } from "@/lib/format";
 import { sessionCacheGet, sessionCacheSet } from "@/lib/session-cache";
 
@@ -23,32 +24,93 @@ type Payload = {
   error?: string;
 };
 
+function peekStock(id: string, month: string) {
+  return sessionCacheGet<Payload>(`stock:${id}:${month || "_"}`);
+}
+
+function StockFallback() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <Skeleton className="h-6 w-48" />
+        <Skeleton className="mt-2 h-4 w-28" />
+      </div>
+      <TableSkeleton
+        columns={[
+          { label: "Fund" },
+          { label: "Category" },
+          { label: "Qty" },
+          { label: "Weight %" },
+          { label: "Δ qty" },
+          { label: "Event" },
+        ]}
+        rows={8}
+      />
+    </div>
+  );
+}
+
 function StockPage() {
   const { id } = useParams<{ id: string }>();
   const search = useSearchParams();
   const month = search.get("month") || "";
   const [data, setData] = useState<Payload | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [updating, setUpdating] = useState(false);
+  const [reload, setReload] = useState(0);
   const [watch, setWatch] = useState<string[]>([]);
 
   useEffect(() => {
     queueMicrotask(() => setWatch(loadWatchlist()));
   }, []);
 
+  useLayoutEffect(() => {
+    const hit = peekStock(id, month);
+    queueMicrotask(() => {
+      if (hit && !hit.error) {
+        setData(hit);
+        setError(null);
+      } else {
+        setData(null);
+      }
+    });
+  }, [id, month]);
+
   useEffect(() => {
+    let cancelled = false;
     const key = `stock:${id}:${month || "_"}`;
     const hit = sessionCacheGet<Payload>(key);
-    if (hit) {
-      queueMicrotask(() => setData(hit));
-      return;
+    if (hit && !hit.error) {
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setData(hit);
+        setError(null);
+        setUpdating(true);
+      });
     }
     const q = month ? `?month=${month}` : "";
     fetch(`/api/v1/stocks/${id}${q}`)
-      .then((r) => r.json())
-      .then((d: Payload) => {
+      .then(async (r) => {
+        const d = (await r.json()) as Payload;
+        if (cancelled) return;
+        if (!r.ok || d.error) {
+          setError(d.error || "Could not load stock");
+          return;
+        }
+        setError(null);
         setData(d);
-        if (!d.error) sessionCacheSet(key, d);
+        sessionCacheSet(key, d);
+      })
+      .catch(() => {
+        if (!cancelled && !sessionCacheGet<Payload>(key)) setError("Could not load stock");
+      })
+      .finally(() => {
+        if (!cancelled) setUpdating(false);
       });
-  }, [id, month]);
+    return () => {
+      cancelled = true;
+    };
+  }, [id, month, reload]);
 
   function toggle() {
     const next = watch.includes(id) ? watch.filter((x) => x !== id) : [...watch, id];
@@ -56,8 +118,10 @@ function StockPage() {
     saveWatchlist(next);
   }
 
-  if (!data) return <LoadingWait label="Loading stock…" />;
-  if (data.error) return <p className="text-sm text-amber-400">{data.error}</p>;
+  if (error && !data) {
+    return <LoadError message={error} onRetry={() => setReload((n) => n + 1)} />;
+  }
+  if (!data) return <StockFallback />;
 
   return (
     <div className="space-y-6">
@@ -66,10 +130,14 @@ function StockPage() {
           <h1 className="text-xl font-medium">{data.stock?.display_name}</h1>
           <p className="text-sm text-muted">{data.stock?.sector || "No sector"}</p>
         </div>
-        <button className="rounded border border-border px-3 py-1 text-sm" onClick={toggle}>
-          {watch.includes(id) ? "Watched" : "Watch"}
-        </button>
+        <div className="flex items-center gap-3">
+          {updating ? <UpdatingNote /> : null}
+          <button className="rounded border border-border px-3 py-1 text-sm" onClick={toggle}>
+            {watch.includes(id) ? "Watched" : "Watch"}
+          </button>
+        </div>
       </div>
+      {error ? <LoadError message={error} onRetry={() => setReload((n) => n + 1)} /> : null}
       <div>
         <h2 className="mb-2 text-sm text-faint">Crowding</h2>
         <p className="mb-3 text-xs text-muted">
@@ -122,7 +190,7 @@ function StockPage() {
 
 export default function StockRoute() {
   return (
-    <Suspense fallback={<LoadingWait label="Loading stock…" />}>
+    <Suspense fallback={<StockFallback />}>
       <StockPage />
     </Suspense>
   );

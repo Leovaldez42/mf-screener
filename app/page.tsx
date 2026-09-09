@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { PrefetchHome } from "@/components/prefetch-home";
 import { getChaseRows, resolveHoldingsMonth } from "@/lib/cached-holdings";
 import { formatMonthLabel, formatNumber, sectorLabel } from "@/lib/format";
 import { supabaseConfigured } from "@/lib/supabase";
@@ -83,6 +84,7 @@ export default async function LandingPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-12">
+      <PrefetchHome month={preview?.month} />
       <section>
         <h1 className="text-2xl font-medium tracking-tight">
           See what Indian active-equity funds bought and sold last month.
