@@ -100,7 +100,7 @@ async function loadStockPayload(id: string, requestedMonth: string) {
   const monthToUse =
     requestedMonth && complete.includes(requestedMonth) ? requestedMonth : history[0]?.month;
   if (!monthToUse) {
-    return { stock, month: null, history: [], holders: [] };
+    return { stock, month: null, history: [], holders: [], summary: null };
   }
 
   type DiffRow = {
@@ -160,7 +160,15 @@ async function loadStockPayload(id: string, requestedMonth: string) {
     })
     .sort((a, b) => b.quantity - a.quantity || Math.abs(b.qty_delta) - Math.abs(a.qty_delta));
 
-  return { stock, month: monthToUse, history, holders };
+  const chase = (await getChaseRows(monthToUse)).find((r) => r.stock_id === id);
+  const summary = {
+    fund_count: chase?.fund_count ?? holders.filter((h) => h.quantity > 0).length,
+    fund_count_delta: chase?.fund_count_delta ?? 0,
+    net_qty_delta: chase?.net_qty_delta ?? 0,
+    net_value_delta_cr: chase?.net_value_delta_cr ?? 0,
+  };
+
+  return { stock, month: monthToUse, history, holders, summary };
 }
 
 export const getStockPayload = unstable_cache(loadStockPayload, ["stock-payload"], {
