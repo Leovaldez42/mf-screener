@@ -54,7 +54,7 @@ function ChaseFallback() {
           Books lag month-end by about ten working days. Click a column header to sort.
         </p>
       </div>
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-3">
         {["Biggest inflow", "Biggest outflow", "Sector signal"].map((label) => (
           <SummaryCardSkeleton key={label} label={label} />
         ))}
@@ -86,19 +86,12 @@ function ChasePage() {
 
   useEffect(() => {
     function onScroll() {
-      const box = document.getElementById("adds-cuts-scroll");
-      const y = box ? box.scrollTop : window.scrollY;
-      setShowTop(y > 400);
+      setShowTop(window.scrollY > 400);
     }
     onScroll();
-    const box = document.getElementById("adds-cuts-scroll");
-    box?.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      box?.removeEventListener("scroll", onScroll);
-      window.removeEventListener("scroll", onScroll);
-    };
-  }, [allRows.length]);
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   useEffect(() => {
     const hit = reload === 0 ? sessionCacheGet<ChaseRow[]>(chaseCacheKey(month)) : undefined;
@@ -219,7 +212,7 @@ function ChasePage() {
       </div>
       {error ? <LoadError message={error} onRetry={() => setReload((n) => n + 1)} /> : null}
 
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-3">
         {showSkeleton ? (
           <>
             <SummaryCardSkeleton label="Biggest inflow" />
@@ -228,39 +221,46 @@ function ChasePage() {
           </>
         ) : (
           <>
-            <div className="rounded border border-border bg-card p-3">
+            <div className="rounded border border-border bg-card px-3 py-2">
               <div className="text-xs uppercase tracking-[0.12em] text-faint">Biggest inflow</div>
-              <div className="mt-2 text-base font-medium text-foreground">
+              <div className="mt-1 truncate text-sm font-medium text-foreground">
                 {summary.inflow ? summary.inflow.display_name : "—"}
-              </div>
-              <div className="mt-1 text-sm text-gain">
-                {summary.inflow
-                  ? `+${formatNumber(summary.inflow.net_value_delta_cr, 1)} ₹ cr`
-                  : "No positive movers"}
+                {summary.inflow ? (
+                  <span className="ml-2 font-normal text-gain">
+                    +{formatNumber(summary.inflow.net_value_delta_cr, 1)} ₹ cr
+                  </span>
+                ) : (
+                  <span className="ml-2 font-normal text-muted">No positive movers</span>
+                )}
               </div>
             </div>
 
-            <div className="rounded border border-border bg-card p-3">
+            <div className="rounded border border-border bg-card px-3 py-2">
               <div className="text-xs uppercase tracking-[0.12em] text-faint">Biggest outflow</div>
-              <div className="mt-2 text-base font-medium text-foreground">
+              <div className="mt-1 truncate text-sm font-medium text-foreground">
                 {summary.outflow ? summary.outflow.display_name : "—"}
-              </div>
-              <div className="mt-1 text-sm text-loss">
-                {summary.outflow
-                  ? `${formatNumber(summary.outflow.net_value_delta_cr, 1)} ₹ cr`
-                  : "No negative movers"}
+                {summary.outflow ? (
+                  <span className="ml-2 font-normal text-loss">
+                    {formatNumber(summary.outflow.net_value_delta_cr, 1)} ₹ cr
+                  </span>
+                ) : (
+                  <span className="ml-2 font-normal text-muted">No negative movers</span>
+                )}
               </div>
             </div>
 
-            <div className="rounded border border-border bg-card p-3">
+            <div className="rounded border border-border bg-card px-3 py-2">
               <div className="text-xs uppercase tracking-[0.12em] text-faint">Sector signal</div>
-              <div className="mt-2 text-base font-medium text-foreground">
+              <div className="mt-1 truncate text-sm font-medium text-foreground">
                 {summary.leadingSector ? summary.leadingSector.name : "—"}
-              </div>
-              <div className="mt-1 text-sm text-muted">
-                {summary.leadingSector
-                  ? `${summary.leadingSector.value > 0 ? "Net inflow" : "Net outflow"}: ${formatNumber(Math.abs(summary.leadingSector.value), 1)} ₹ cr`
-                  : "No sector signal"}
+                {summary.leadingSector ? (
+                  <span className="ml-2 font-normal text-muted">
+                    {summary.leadingSector.value > 0 ? "Net inflow" : "Net outflow"}{" "}
+                    {formatNumber(Math.abs(summary.leadingSector.value), 1)} ₹ cr
+                  </span>
+                ) : (
+                  <span className="ml-2 font-normal text-muted">No sector signal</span>
+                )}
               </div>
             </div>
           </>
@@ -329,10 +329,7 @@ function ChasePage() {
         <button
           type="button"
           className="fixed right-4 bottom-6 z-40 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted shadow-sm hover:text-foreground"
-          onClick={() => {
-            document.getElementById("adds-cuts-scroll")?.scrollTo({ top: 0, behavior: "smooth" });
-            window.scrollTo({ top: 0, behavior: "smooth" });
-          }}
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
           aria-label="Back to top"
         >
           <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
