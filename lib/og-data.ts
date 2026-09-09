@@ -36,7 +36,6 @@ export async function loadOgStockCard(id: string, requestedMonth: string): Promi
   const month = payload.month;
   if (!month) return null;
   const stock = payload.stock as { display_name?: string; sector?: string | null };
-  const chase = (await getChaseRows(month)).find((r) => r.stock_id === id);
   const holders = (payload.holders || []) as {
     family_name: string;
     qty_delta: number;
@@ -62,10 +61,10 @@ export async function loadOgStockCard(id: string, requestedMonth: string): Promi
   return {
     month,
     name: String(stock?.display_name || "Unknown"),
-    sector: sectorLabel(stock?.sector ?? chase?.sector),
-    fund_count: chase?.fund_count ?? summary?.fund_count ?? 0,
-    fund_count_delta: chase?.fund_count_delta ?? summary?.fund_count_delta ?? 0,
-    net_value_delta_cr: chase?.net_value_delta_cr ?? summary?.net_value_delta_cr ?? 0,
+    sector: sectorLabel(stock?.sector),
+    fund_count: summary?.fund_count ?? 0,
+    fund_count_delta: summary?.fund_count_delta ?? 0,
+    net_value_delta_cr: summary?.net_value_delta_cr ?? 0,
     cuts,
     adds,
   };

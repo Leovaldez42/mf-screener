@@ -7,6 +7,7 @@ import { LoadError } from "@/components/load-ui";
 import { ThemeToggle } from "@/components/theme";
 import { formatMonthLabel } from "@/lib/format";
 import { loadMonths, peekMonths } from "@/lib/load-months";
+import { prefetchHomeData } from "@/lib/prefetch-home";
 
 function MonthSelectFallback() {
   return (
@@ -163,7 +164,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
             className={`${menuOpen ? "flex" : "hidden"} w-full flex-col gap-2 text-sm md:ml-0 md:flex md:w-auto md:flex-row md:flex-wrap md:gap-3`}
           >
             {nav.map((item) => (
-              <Link key={item.href} href={item.href} className={navClass(item.href)}>
+              <Link
+                key={item.href}
+                href={item.href}
+                className={navClass(item.href)}
+                onMouseEnter={item.href === "/adds-cuts" ? () => prefetchHomeData() : undefined}
+                onFocus={item.href === "/adds-cuts" ? () => prefetchHomeData() : undefined}
+              >
                 {item.label}
               </Link>
             ))}

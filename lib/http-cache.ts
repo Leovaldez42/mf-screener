@@ -5,8 +5,8 @@ export const METRICS_REVALIDATE_SEC = 120;
 export const CACHE_TAG_HOLDINGS = "holdings";
 export const CACHE_TAG_METRICS = "metrics";
 
-/** Browser always revalidates; CDN / shared caches keep the body. */
-export const HOLDINGS_CACHE_CONTROL = `public, max-age=0, s-maxage=${HOLDINGS_REVALIDATE_SEC}, stale-while-revalidate=3600`;
+/** Browser and CDN both keep holdings JSON so repeat visits skip the network. */
+export const HOLDINGS_CACHE_CONTROL = `public, max-age=120, s-maxage=${HOLDINGS_REVALIDATE_SEC}, stale-while-revalidate=3600`;
 export const METRICS_CACHE_CONTROL = `public, max-age=0, s-maxage=${METRICS_REVALIDATE_SEC}, stale-while-revalidate=1800`;
 export const NO_STORE_CACHE_CONTROL = "no-store, max-age=0";
 

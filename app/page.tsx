@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { AddsCutsLink } from "@/components/adds-cuts-link";
 import { PrefetchHome } from "@/components/prefetch-home";
 import { getChaseRows, resolveHoldingsMonth } from "@/lib/cached-holdings";
 import { formatMonthLabel, formatNumber, sectorLabel } from "@/lib/format";
@@ -84,7 +85,10 @@ export default async function LandingPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-12">
-      <PrefetchHome month={preview?.month} />
+      <PrefetchHome
+        month={preview?.month}
+        seed={preview ? [...preview.inflows, ...preview.outflows] : undefined}
+      />
       <section>
         <h1 className="text-2xl font-medium tracking-tight">
           See what Indian active-equity funds bought and sold last month.
@@ -95,12 +99,11 @@ export default async function LandingPage() {
           with no extra buying does not show up as a buy.
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
-          <Link
-            href="/adds-cuts"
+          <AddsCutsLink
             className="rounded border border-foreground bg-foreground px-3 py-1.5 text-sm text-background"
           >
             See adds & cuts
-          </Link>
+          </AddsCutsLink>
           <Link
             href="/screener"
             className="rounded border border-border bg-card px-3 py-1.5 text-sm text-muted hover:text-foreground"
@@ -118,9 +121,7 @@ export default async function LandingPage() {
             <div className="text-xs uppercase tracking-[0.12em] text-faint">Follow the money</div>
             <p className="mt-2 text-sm leading-6 text-muted">
               Open{" "}
-              <Link className="text-foreground underline" href="/adds-cuts">
-                Adds & cuts
-              </Link>
+              <AddsCutsLink className="text-foreground underline">Adds & cuts</AddsCutsLink>
               , sort by Net ₹ cr, then click a stock to see which funds added or cut.
             </p>
           </div>
@@ -154,9 +155,9 @@ export default async function LandingPage() {
         <section>
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-xl font-medium">This month&apos;s biggest moves</h2>
-            <Link className="text-sm text-muted underline hover:text-foreground" href="/adds-cuts">
+            <AddsCutsLink className="text-sm text-muted underline hover:text-foreground">
               See all adds and cuts
-            </Link>
+            </AddsCutsLink>
           </div>
           <p className="mt-1 text-sm text-muted">Holdings as of {formatMonthLabel(preview.month)}.</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
