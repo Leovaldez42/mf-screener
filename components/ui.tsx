@@ -57,6 +57,10 @@ function MonthSelect() {
   }, []);
 
   function setMonth(next: string) {
+    if (pathname.startsWith("/month/")) {
+      router.push(next ? `/month/${next}` : "/adds-cuts");
+      return;
+    }
     const params = new URLSearchParams(search.toString());
     if (next) params.set("month", next);
     else params.delete("month");
@@ -117,6 +121,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     pathname === "/adds-cuts" ||
     pathname.startsWith("/stocks/") ||
     pathname.startsWith("/funds/") ||
+    pathname.startsWith("/month/") ||
     pathname === "/sectors" ||
     pathname === "/watchlist";
 
