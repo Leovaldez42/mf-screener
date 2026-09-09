@@ -1,22 +1,22 @@
 "use client";
 
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
-import { Delta, LoadingWait, loadWatchlist, saveWatchlist } from "@/components/ui";
+import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { ChaseTable, type SortKey } from "@/components/chase-table";
+import { LoadError, SummaryCardSkeleton, TableSkeleton, UpdatingNote } from "@/components/load-ui";
+import { loadWatchlist, saveWatchlist } from "@/components/ui";
 import { formatNumber, sectorLabel } from "@/lib/format";
-import { sessionCacheGet, sessionCacheSet } from "@/lib/session-cache";
+import { chaseCacheKey, sessionCacheGet, sessionCacheSet } from "@/lib/session-cache";
 import type { ChaseRow } from "@/lib/types";
 
-type SortKey = "display_name" | "sector" | "fund_count" | "net_qty_delta" | "net_value_delta_cr" | "median_weight_pct";
-
-const COLUMNS: { key: SortKey; label: string; hide: string; sticky?: boolean }[] = [
-  { key: "display_name", label: "Stock", hide: "", sticky: true },
-  { key: "sector", label: "Sector", hide: "hidden sm:table-cell" },
-  { key: "fund_count", label: "Funds", hide: "" },
-  { key: "net_qty_delta", label: "Net qty", hide: "hidden md:table-cell" },
-  { key: "net_value_delta_cr", label: "Net ₹ cr", hide: "" },
-  { key: "median_weight_pct", label: "Median wt %", hide: "hidden sm:table-cell" },
+const SKELETON_COLS = [
+  { label: "Stock" },
+  { label: "Sector", hide: "hidden sm:table-cell" },
+  { label: "Funds" },
+  { label: "Net qty", hide: "hidden md:table-cell" },
+  { label: "Net ₹ cr" },
+  { label: "Median wt %", hide: "hidden sm:table-cell" },
+  { label: "" },
 ];
 
 function sortValue(row: ChaseRow, key: SortKey): string | number {
@@ -24,6 +24,10 @@ function sortValue(row: ChaseRow, key: SortKey): string | number {
   if (key === "sector") return sectorLabel(row.sector).toLowerCase();
   if (key === "median_weight_pct") return row.median_weight_pct ?? Number.NEGATIVE_INFINITY;
   return row[key];
+}
+
+function peekChase(month: string) {
+  return sessionCacheGet<ChaseRow[]>(chaseCacheKey(month)) ?? [];
 }
 
 function ChaseFallback() {
@@ -39,19 +43,10 @@ function ChaseFallback() {
       </div>
       <div className="grid gap-3 md:grid-cols-3">
         {["Biggest inflow", "Biggest outflow", "Sector signal"].map((label) => (
-          <div key={label} className="rounded border border-border bg-card p-3">
-            <div className="text-xs uppercase tracking-[0.12em] text-faint">{label}</div>
-            <div className="mt-2 text-base font-medium text-foreground">…</div>
-            <div className="mt-1 text-sm text-muted">…</div>
-          </div>
+          <SummaryCardSkeleton key={label} label={label} />
         ))}
       </div>
-      <div className="flex flex-wrap gap-3 text-sm">
-        <span className="inline-block h-8 w-36 rounded border border-border bg-input" />
-        <span className="inline-block h-8 w-32 rounded border border-border bg-input" />
-        <span className="inline-block h-8 w-48 rounded border border-border bg-input" />
-      </div>
-      <LoadingWait label="Loading holdings…" />
+      <TableSkeleton columns={SKELETON_COLS} />
     </div>
   );
 }
@@ -62,17 +57,78 @@ function ChasePage() {
   const [allRows, setAllRows] = useState<ChaseRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [sector, setSector] = useState("");
-  const [minFunds, setMinFunds] = useState("0");
+  const [minFunds, setMinFunds] = useState("");
   const [stockQ, setStockQ] = useState("");
   const [showTop, setShowTop] = useState(false);
   const [watch, setWatch] = useState<string[]>([]);
   const [sortKey, setSortKey] = useState<SortKey>("net_value_delta_cr");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
+  const [reload, setReload] = useState(0);
 
-  useEffect(() => {
-    queueMicrotask(() => setWatch(loadWatchlist()));
-  }, []);
+  const load = useCallback(() => {
+    let cancelled = false;
+    const key = chaseCacheKey(month);
+    const hit = sessionCacheGet<ChaseRow[]>(key);
+    if (hit?.length) {
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setAllRows(hit);
+        setError(null);
+        setLoading(false);
+        setUpdating(true);
+      });
+    } else {
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setLoading(true);
+        setUpdating(false);
+      });
+    }
+    const q = new URLSearchParams();
+    if (month) q.set("month", month);
+    fetch(`/api/v1/chase?${q}`)
+      .then(async (r) => {
+        const d = await r.json();
+        if (cancelled) return;
+        const next = (d.rows || []) as ChaseRow[];
+        if (!r.ok && r.status !== 503) {
+          setError(d.error || "Failed to load");
+          if (next.length) setAllRows(next);
+          return;
+        }
+        setError(null);
+        setAllRows(next);
+        if (r.ok) sessionCacheSet(key, next);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        if (!sessionCacheGet<ChaseRow[]>(key)?.length) setError("Failed to load");
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoading(false);
+        setUpdating(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [month]);
+
+  useLayoutEffect(() => {
+    const hit = peekChase(month);
+    queueMicrotask(() => {
+      if (hit.length) {
+        setAllRows(hit);
+        setError(null);
+        setLoading(false);
+      } else {
+        setAllRows([]);
+        setLoading(true);
+      }
+    });
+  }, [month]);
 
   useEffect(() => {
     function onScroll() {
@@ -84,45 +140,12 @@ function ChasePage() {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    const key = `chase:${month || "_"}`;
-    const hit = sessionCacheGet<ChaseRow[]>(key);
-    if (hit) {
-      queueMicrotask(() => {
-        if (cancelled) return;
-        setAllRows(hit);
-        setError(null);
-        setLoading(false);
-      });
-      return () => {
-        cancelled = true;
-      };
-    }
-    const q = new URLSearchParams();
-    if (month) q.set("month", month);
-    queueMicrotask(() => {
-      if (!cancelled) setLoading(true);
-    });
-    fetch(`/api/v1/chase?${q}`)
-      .then(async (r) => {
-        const d = await r.json();
-        if (cancelled) return;
-        if (!r.ok && r.status !== 503) setError(d.error || "Failed to load");
-        else setError(null);
-        const next = (d.rows || []) as ChaseRow[];
-        setAllRows(next);
-        if (r.ok) sessionCacheSet(key, next);
-      })
-      .catch(() => {
-        if (!cancelled) setError("Failed to load");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [month]);
+    queueMicrotask(() => setWatch(loadWatchlist()));
+  }, []);
+
+  useEffect(() => {
+    return load();
+  }, [load, reload]);
 
   const rows = useMemo(() => {
     const min = Number(minFunds) || 0;
@@ -198,60 +221,69 @@ function ChasePage() {
     setSortOrder(key === "display_name" || key === "sector" ? "asc" : "desc");
   }
 
+  const showSkeleton = loading && allRows.length === 0 && !error;
+
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-medium">Adds & cuts</h1>
-        <p className="mt-1 text-sm text-muted">
-          Active equity funds only. Adds and cuts use share quantity, not weight. Use{" "}
-          <strong>Holdings as of</strong> in the header. Older months may have thinner coverage.
-          Books lag month-end by about ten working days. Click a column header to sort.
-        </p>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-medium">Adds & cuts</h1>
+          <p className="mt-1 text-sm text-muted">
+            Active equity funds only. Adds and cuts use share quantity, not weight. Use{" "}
+            <strong>Holdings as of</strong> in the header. Older months may have thinner coverage.
+            Books lag month-end by about ten working days. Click a column header to sort.
+          </p>
+        </div>
+        {updating ? <UpdatingNote /> : null}
       </div>
-      {error ? <p className="text-sm text-amber-400">{error}</p> : null}
+      {error ? <LoadError message={error} onRetry={() => setReload((n) => n + 1)} /> : null}
 
       <div className="grid gap-3 md:grid-cols-3">
-        <div className="rounded border border-border bg-card p-3">
-          <div className="text-xs uppercase tracking-[0.12em] text-faint">Biggest inflow</div>
-          <div className="mt-2 text-base font-medium text-foreground">
-            {loading ? "…" : summary.inflow ? summary.inflow.display_name : "—"}
-          </div>
-          <div className="mt-1 text-sm text-gain">
-            {loading
-              ? "…"
-              : summary.inflow
-                ? `+${formatNumber(summary.inflow.net_value_delta_cr, 1)} ₹ cr`
-                : "No positive movers"}
-          </div>
-        </div>
+        {showSkeleton ? (
+          <>
+            <SummaryCardSkeleton label="Biggest inflow" />
+            <SummaryCardSkeleton label="Biggest outflow" />
+            <SummaryCardSkeleton label="Sector signal" />
+          </>
+        ) : (
+          <>
+            <div className="rounded border border-border bg-card p-3">
+              <div className="text-xs uppercase tracking-[0.12em] text-faint">Biggest inflow</div>
+              <div className="mt-2 text-base font-medium text-foreground">
+                {summary.inflow ? summary.inflow.display_name : "—"}
+              </div>
+              <div className="mt-1 text-sm text-gain">
+                {summary.inflow
+                  ? `+${formatNumber(summary.inflow.net_value_delta_cr, 1)} ₹ cr`
+                  : "No positive movers"}
+              </div>
+            </div>
 
-        <div className="rounded border border-border bg-card p-3">
-          <div className="text-xs uppercase tracking-[0.12em] text-faint">Biggest outflow</div>
-          <div className="mt-2 text-base font-medium text-foreground">
-            {loading ? "…" : summary.outflow ? summary.outflow.display_name : "—"}
-          </div>
-          <div className="mt-1 text-sm text-loss">
-            {loading
-              ? "…"
-              : summary.outflow
-                ? `${formatNumber(summary.outflow.net_value_delta_cr, 1)} ₹ cr`
-                : "No negative movers"}
-          </div>
-        </div>
+            <div className="rounded border border-border bg-card p-3">
+              <div className="text-xs uppercase tracking-[0.12em] text-faint">Biggest outflow</div>
+              <div className="mt-2 text-base font-medium text-foreground">
+                {summary.outflow ? summary.outflow.display_name : "—"}
+              </div>
+              <div className="mt-1 text-sm text-loss">
+                {summary.outflow
+                  ? `${formatNumber(summary.outflow.net_value_delta_cr, 1)} ₹ cr`
+                  : "No negative movers"}
+              </div>
+            </div>
 
-        <div className="rounded border border-border bg-card p-3">
-          <div className="text-xs uppercase tracking-[0.12em] text-faint">Sector signal</div>
-          <div className="mt-2 text-base font-medium text-foreground">
-            {loading ? "…" : summary.leadingSector ? summary.leadingSector.name : "—"}
-          </div>
-          <div className="mt-1 text-sm text-muted">
-            {loading
-              ? "…"
-              : summary.leadingSector
-                ? `${summary.leadingSector.value > 0 ? "Net inflow" : "Net outflow"}: ${formatNumber(Math.abs(summary.leadingSector.value), 1)} ₹ cr`
-                : "No sector signal"}
-          </div>
-        </div>
+            <div className="rounded border border-border bg-card p-3">
+              <div className="text-xs uppercase tracking-[0.12em] text-faint">Sector signal</div>
+              <div className="mt-2 text-base font-medium text-foreground">
+                {summary.leadingSector ? summary.leadingSector.name : "—"}
+              </div>
+              <div className="mt-1 text-sm text-muted">
+                {summary.leadingSector
+                  ? `${summary.leadingSector.value > 0 ? "Net inflow" : "Net outflow"}: ${formatNumber(Math.abs(summary.leadingSector.value), 1)} ₹ cr`
+                  : "No sector signal"}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-3 text-sm">
@@ -276,6 +308,8 @@ function ChasePage() {
             className="w-20 rounded border border-border bg-input px-2 py-1"
             value={minFunds}
             onChange={(e) => setMinFunds(e.target.value)}
+            placeholder="Any"
+            inputMode="numeric"
           />
         </label>
         <label className="flex items-center gap-2">
@@ -290,9 +324,9 @@ function ChasePage() {
           />
         </label>
       </div>
-      {loading ? (
-        <LoadingWait label="Loading holdings…" />
-      ) : allRows.length === 0 ? (
+      {showSkeleton ? (
+        <TableSkeleton columns={SKELETON_COLS} rows={12} />
+      ) : error && allRows.length === 0 ? null : allRows.length === 0 ? (
         <p className="text-sm text-faint">
           No rows. Apply the SQL migration in Supabase, set <code>.env.local</code>, then run{" "}
           <code>npm run ingest</code>.
@@ -300,63 +334,15 @@ function ChasePage() {
       ) : tableRows.length === 0 ? (
         <p className="text-sm text-faint">No stocks match these filters.</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="text-faint">
-              <tr>
-                {COLUMNS.map((column) => {
-                  const isActive = sortKey === column.key;
-                  const arrow = isActive ? (sortOrder === "desc" ? "↓" : "↑") : "↕";
-                  return (
-                    <th
-                      key={column.key}
-                      className={`py-2 pr-3 font-normal ${column.hide} ${column.sticky ? "sticky left-0 z-10 bg-background" : ""}`}
-                    >
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1 hover:text-foreground"
-                        onClick={() => onSort(column.key)}
-                      >
-                        {column.label}
-                        <span className={isActive ? "text-foreground" : "text-faint"}>{arrow}</span>
-                      </button>
-                    </th>
-                  );
-                })}
-                <th className="py-2 font-normal" />
-              </tr>
-            </thead>
-            <tbody>
-              {sortedRows.map((r) => (
-                <tr key={r.stock_id} className="border-t border-border">
-                  <td className="sticky left-0 z-10 bg-background py-2 pr-3">
-                    <Link className="hover:underline" href={`/stocks/${r.stock_id}?month=${month}`}>
-                      {r.display_name}
-                    </Link>
-                  </td>
-                  <td className="hidden py-2 pr-3 text-muted sm:table-cell">{sectorLabel(r.sector)}</td>
-                  <td className="py-2 pr-3">{r.fund_count}</td>
-                  <td className="hidden py-2 pr-3 md:table-cell">
-                    <Delta value={r.net_qty_delta} />
-                  </td>
-                  <td className="py-2 pr-3">
-                    <Delta value={r.net_value_delta_cr} />
-                  </td>
-                  <td className="hidden py-2 pr-3 sm:table-cell">{formatNumber(r.median_weight_pct)}</td>
-                  <td className="py-2">
-                    <button
-                      type="button"
-                      className="rounded border border-border px-2 py-0.5 text-xs text-muted hover:border-faint hover:text-foreground"
-                      onClick={() => toggle(r.stock_id)}
-                    >
-                      {watch.includes(r.stock_id) ? "Watched" : "Watch"}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ChaseTable
+          rows={sortedRows}
+          month={month}
+          sortKey={sortKey}
+          sortOrder={sortOrder}
+          watch={watch}
+          onSort={onSort}
+          onToggleWatch={toggle}
+        />
       )}
       {showTop ? (
         <button

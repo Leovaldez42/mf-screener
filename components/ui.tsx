@@ -2,16 +2,17 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useLayoutEffect, useState } from "react";
+import { LoadError } from "@/components/load-ui";
 import { ThemeToggle } from "@/components/theme";
 import { formatMonthLabel } from "@/lib/format";
-import { loadMonths } from "@/lib/load-months";
+import { loadMonths, peekMonths } from "@/lib/load-months";
 
 function MonthSelectFallback() {
   return (
     <div className="flex h-8 w-full items-center gap-2 text-sm md:ml-auto md:w-auto">
       <span className="text-faint">Holdings as of</span>
-      <span className="inline-block h-8 min-w-44 flex-1 rounded border border-border bg-input md:flex-none" />
+      <span className="inline-block h-8 min-w-44 flex-1 animate-pulse rounded border border-border bg-surface md:flex-none" />
     </div>
   );
 }
@@ -21,20 +22,63 @@ function MonthSelect() {
   const search = useSearchParams();
   const router = useRouter();
   const [months, setMonths] = useState<string[]>([]);
+  const [status, setStatus] = useState<"boot" | "loading" | "ready" | "error">("boot");
   const month = search.get("month") || months[0] || "";
 
-  useEffect(() => {
+  function refresh() {
+    if (!peekMonths().length) setStatus("loading");
     loadMonths()
-      .then(setMonths)
-      .catch(() => setMonths([]));
+      .then((next) => {
+        setMonths(next);
+        setStatus("ready");
+      })
+      .catch(() => {
+        const cached = peekMonths();
+        if (cached.length) {
+          setMonths(cached);
+          setStatus("ready");
+        } else {
+          setStatus("error");
+        }
+      });
+  }
+
+  useLayoutEffect(() => {
+    queueMicrotask(() => {
+      const cached = peekMonths();
+      if (cached.length) {
+        setMonths(cached);
+        setStatus("ready");
+      } else {
+        setStatus("loading");
+      }
+      refresh();
+    });
   }, []);
 
   function setMonth(next: string) {
+    if (pathname.startsWith("/month/")) {
+      router.push(next ? `/month/${next}` : "/adds-cuts");
+      return;
+    }
     const params = new URLSearchParams(search.toString());
     if (next) params.set("month", next);
     else params.delete("month");
     const q = params.toString();
     router.push(`${pathname}${q ? `?${q}` : ""}`);
+  }
+
+  if (status === "boot" || (status === "loading" && months.length === 0)) {
+    return <MonthSelectFallback />;
+  }
+
+  if (status === "error" && months.length === 0) {
+    return (
+      <div className="flex h-8 w-full items-center gap-2 text-sm md:ml-auto md:w-auto">
+        <span className="text-faint">Holdings as of</span>
+        <LoadError message="Could not load months" onRetry={refresh} />
+      </div>
+    );
   }
 
   return (
@@ -77,6 +121,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     pathname === "/adds-cuts" ||
     pathname.startsWith("/stocks/") ||
     pathname.startsWith("/funds/") ||
+    pathname.startsWith("/month/") ||
     pathname === "/sectors" ||
     pathname === "/watchlist";
 

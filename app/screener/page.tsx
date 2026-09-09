@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { LoadingWait } from "@/components/ui";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { LoadError, TableSkeleton, UpdatingNote } from "@/components/load-ui";
 import { type CategoryAverage, type SchemeMetric, type SortKey } from "@/lib/scheme-metrics";
 import { formatNumber } from "@/lib/format";
 
@@ -27,6 +27,8 @@ export default function ScreenerPage() {
   const [universe, setUniverse] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
+  const [reload, setReload] = useState(0);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [q, setQ] = useState("");
   const [style, setStyle] = useState("");
@@ -41,6 +43,7 @@ export default function ScreenerPage() {
   const [maxAum, setMaxAum] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("sharpe_3y");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const hasRows = useRef(false);
 
   const query = useMemo(() => {
     const p = new URLSearchParams();
@@ -77,23 +80,34 @@ export default function ScreenerPage() {
 
   useEffect(() => {
     const t = setTimeout(() => {
-      setLoading(true);
+      if (hasRows.current) setUpdating(true);
+      else setLoading(true);
       fetch(`/api/v1/schemes?${query}`)
         .then(async (r) => {
           const d = await r.json();
-          if (!r.ok) setError(d.error || "Could not load schemes");
-          else setError(null);
-          setSchemes(d.schemes || []);
+          if (!r.ok) {
+            setError(d.error || "Could not load schemes");
+            return;
+          }
+          setError(null);
+          const next = (d.schemes || []) as SchemeMetric[];
+          setSchemes(next);
+          hasRows.current = next.length > 0;
           setHouses(d.houses || []);
           setStyles(d.styles || []);
           setStyleAverage(d.styleAverage || null);
           setUniverse(typeof d.universe === "number" ? d.universe : null);
         })
-        .catch(() => setError("Could not load schemes"))
-        .finally(() => setLoading(false));
+        .catch(() => {
+          if (!hasRows.current) setError("Could not load schemes");
+        })
+        .finally(() => {
+          setLoading(false);
+          setUpdating(false);
+        });
     }, 250);
     return () => clearTimeout(t);
-  }, [query]);
+  }, [query, reload]);
 
   function onSort(key: SortKey) {
     if (sortKey === key) {
@@ -168,19 +182,19 @@ export default function ScreenerPage() {
       <div>
         <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.14em] text-faint">Risk / return</div>
         <div className="grid grid-cols-2 gap-2">
-          <NumField label="Min Sharpe" value={minSharpe} onChange={setMinSharpe} placeholder="0.5" />
-          <NumField label="Min 1Y CAGR" value={minCagr1y} onChange={setMinCagr1y} placeholder="8" />
-          <NumField label="Min 3Y CAGR" value={minCagr3y} onChange={setMinCagr3y} placeholder="12" />
-          <NumField label="Min inception CAGR" value={minCagrInception} onChange={setMinCagrInception} placeholder="10" />
+          <NumField label="Min Sharpe" value={minSharpe} onChange={setMinSharpe} />
+          <NumField label="Min 1Y CAGR" value={minCagr1y} onChange={setMinCagr1y} />
+          <NumField label="Min 3Y CAGR" value={minCagr3y} onChange={setMinCagr3y} />
+          <NumField label="Min inception CAGR" value={minCagrInception} onChange={setMinCagrInception} />
         </div>
       </div>
       <div>
         <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.14em] text-faint">Cost / scale</div>
         <div className="grid grid-cols-2 gap-2">
-          <NumField label="Max TER" value={maxExpense} onChange={setMaxExpense} placeholder="1.0" />
-          <NumField label="Max PE" value={maxPe} onChange={setMaxPe} placeholder="30" />
-          <NumField label="Min AUM" value={minAum} onChange={setMinAum} placeholder="500" numeric />
-          <NumField label="Max AUM" value={maxAum} onChange={setMaxAum} placeholder="50000" numeric />
+          <NumField label="Max TER" value={maxExpense} onChange={setMaxExpense} />
+          <NumField label="Max PE" value={maxPe} onChange={setMaxPe} />
+          <NumField label="Min AUM" value={minAum} onChange={setMinAum} numeric />
+          <NumField label="Max AUM" value={maxAum} onChange={setMaxAum} numeric />
         </div>
       </div>
     </div>
@@ -188,16 +202,19 @@ export default function ScreenerPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-medium">Fund screener</h1>
-        <p className="text-sm text-muted">
-          Direct Growth active-equity schemes. Filter by fund house, category, Sharpe, TER, and returns.
-          Open a scheme for peer category averages.
-        </p>
-        <p className="mt-1 text-xs text-faint">
-          Click any column header to sort.
-          {universe != null ? ` Showing ${schemes.length} of ${universe} schemes.` : null}
-        </p>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h1 className="text-xl font-medium">Fund screener</h1>
+          <p className="text-sm text-muted">
+            Direct Growth active-equity schemes. Filter by fund house, category, Sharpe, TER, and returns.
+            Open a scheme for peer category averages.
+          </p>
+          <p className="mt-1 text-xs text-faint">
+            Click any column header to sort.
+            {universe != null ? ` Showing ${schemes.length} of ${universe} schemes.` : null}
+          </p>
+        </div>
+        {updating ? <UpdatingNote /> : null}
       </div>
 
       <button
@@ -215,14 +232,22 @@ export default function ScreenerPage() {
 
         <div className="min-w-0 space-y-4">
           {error ? (
-            <p className="text-sm text-amber-400">
-              {error === "supabase_not_configured"
-                ? "Supabase is not configured. Add keys, run the scheme_metrics migration, then npm run ingest:metrics."
-                : error}
-            </p>
+            <LoadError
+              message={
+                error === "supabase_not_configured"
+                  ? "Supabase is not configured. Add keys, run the scheme_metrics migration, then npm run ingest:metrics."
+                  : error
+              }
+              onRetry={() => setReload((n) => n + 1)}
+            />
           ) : null}
-          {!error && loading ? <LoadingWait label="Loading schemes…" /> : null}
-          {!error && !loading && schemes.length === 0 ? (
+          {loading && schemes.length === 0 ? (
+            <TableSkeleton
+              columns={TABLE_COLUMNS.map((c) => ({ label: c.label, hide: c.hide }))}
+              rows={12}
+            />
+          ) : null}
+          {!loading && !error && schemes.length === 0 ? (
             <p className="text-sm text-faint">
               No rows yet. After SQL is applied: <code>npm run ingest:metrics</code>
             </p>
@@ -243,6 +268,7 @@ export default function ScreenerPage() {
             </div>
           ) : null}
 
+          {schemes.length > 0 ? (
           <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
             <table className="w-full text-sm">
               <thead className="text-faint">
@@ -292,6 +318,7 @@ export default function ScreenerPage() {
               </tbody>
             </table>
           </div>
+          ) : null}
         </div>
       </div>
     </div>
@@ -302,14 +329,12 @@ function NumField({
   label,
   value,
   onChange,
-  placeholder,
   className = "",
   numeric = false,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
-  placeholder: string;
   className?: string;
   numeric?: boolean;
 }) {
@@ -317,10 +342,10 @@ function NumField({
     <label className={`text-xs text-faint ${className}`}>
       {label}
       <input
-        className="mt-1 w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground"
+        className="mt-1 w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground placeholder:text-faint"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
+        placeholder="Any"
         inputMode={numeric ? "numeric" : "decimal"}
       />
     </label>
