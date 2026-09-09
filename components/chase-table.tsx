@@ -1,8 +1,6 @@
-"use client";
-
-import { useWindowVirtualizer } from "@tanstack/react-virtual";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import Link from "next/link";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import { Delta } from "@/components/ui";
 import { formatNumber, sectorLabel } from "@/lib/format";
 import type { ChaseRow } from "@/lib/types";
@@ -19,14 +17,14 @@ const COLUMNS: { key: SortKey; label: string; hide: string; sticky?: boolean }[]
 ];
 
 const COLSPAN = COLUMNS.length + 1;
-const ROW_H = 37;
+const ROW_H = 40;
 
 export function ChaseTable({
   rows,
   month,
   sortKey,
   sortOrder,
-  watch,
+  watched,
   onSort,
   onToggleWatch,
 }: {
@@ -34,39 +32,33 @@ export function ChaseTable({
   month: string;
   sortKey: SortKey;
   sortOrder: "asc" | "desc";
-  watch: string[];
+  watched: Set<string>;
   onSort: (key: SortKey) => void;
   onToggleWatch: (id: string) => void;
 }) {
-  const tbodyRef = useRef<HTMLTableSectionElement>(null);
-  const [scrollMargin, setScrollMargin] = useState(0);
-
-  useLayoutEffect(() => {
-    const el = tbodyRef.current;
-    if (!el) return;
-    const update = () => setScrollMargin(el.getBoundingClientRect().top + window.scrollY);
-    update();
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
-  }, [rows.length]);
-
-  const virtualizer = useWindowVirtualizer({
+  "use no memo";
+  const parentRef = useRef<HTMLDivElement>(null);
+  // TanStack Virtual cannot be memoized; this component is opted out via "use no memo".
+  // eslint-disable-next-line react-hooks/incompatible-library -- virtualizer returns unstable functions
+  const virtualizer = useVirtualizer({
     count: rows.length,
+    getScrollElement: () => parentRef.current,
     estimateSize: () => ROW_H,
-    overscan: 16,
-    scrollMargin,
+    overscan: 10,
   });
-
   const items = virtualizer.getVirtualItems();
-  const paddingTop = items.length > 0 ? Math.max(0, items[0].start - scrollMargin) : 0;
+  const paddingTop = items[0]?.start ?? 0;
   const last = items[items.length - 1];
-  const paddingBottom =
-    items.length > 0 ? Math.max(0, virtualizer.getTotalSize() - (last.end - scrollMargin)) : 0;
+  const paddingBottom = last ? virtualizer.getTotalSize() - last.end : 0;
 
   return (
-    <div className="overflow-x-auto">
+    <div
+      ref={parentRef}
+      id="adds-cuts-scroll"
+      className="max-h-[min(70vh,44rem)] overflow-auto overscroll-contain"
+    >
       <table className="w-full text-left text-sm">
-        <thead className="text-faint">
+        <thead className="sticky top-0 z-20 bg-background text-faint">
           <tr>
             {COLUMNS.map((column) => {
               const isActive = sortKey === column.key;
@@ -90,7 +82,7 @@ export function ChaseTable({
             <th className="py-2 font-normal" />
           </tr>
         </thead>
-        <tbody ref={tbodyRef}>
+        <tbody>
           {paddingTop > 0 ? (
             <tr>
               <td colSpan={COLSPAN} style={{ height: paddingTop, padding: 0, border: 0 }} />
@@ -99,12 +91,7 @@ export function ChaseTable({
           {items.map((virtualRow) => {
             const r = rows[virtualRow.index];
             return (
-              <tr
-                key={r.stock_id}
-                data-index={virtualRow.index}
-                ref={virtualizer.measureElement}
-                className="border-t border-border"
-              >
+              <tr key={r.stock_id} className="border-t border-border">
                 <td className="sticky left-0 z-10 bg-background py-2 pr-3">
                   <Link className="hover:underline" href={`/stocks/${r.stock_id}?month=${month}`}>
                     {r.display_name}
@@ -125,7 +112,7 @@ export function ChaseTable({
                     className="rounded border border-border px-2 py-0.5 text-xs text-muted hover:border-faint hover:text-foreground"
                     onClick={() => onToggleWatch(r.stock_id)}
                   >
-                    {watch.includes(r.stock_id) ? "Watched" : "Watch"}
+                    {watched.has(r.stock_id) ? "Watched" : "Watch"}
                   </button>
                 </td>
               </tr>

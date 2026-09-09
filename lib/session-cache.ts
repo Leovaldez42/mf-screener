@@ -4,6 +4,18 @@ const STORAGE_PREFIX = "mf-chase:sc:";
 type Entry = { at: number; value: unknown };
 
 const store = new Map<string, Entry>();
+const listeners = new Set<() => void>();
+
+function notify() {
+  listeners.forEach((fn) => fn());
+}
+
+export function sessionCacheSubscribe(onStoreChange: () => void) {
+  listeners.add(onStoreChange);
+  return () => {
+    listeners.delete(onStoreChange);
+  };
+}
 
 function readStorage(key: string): Entry | undefined {
   if (typeof window === "undefined") return undefined;
@@ -56,7 +68,14 @@ export function sessionCacheGet<T>(key: string): T | undefined {
 export function sessionCacheSet<T>(key: string, value: T) {
   const entry: Entry = { at: Date.now(), value };
   store.set(key, entry);
-  writeStorage(key, entry);
+  notify();
+  if (typeof window === "undefined") return;
+  const persist = () => writeStorage(key, entry);
+  if (key.startsWith("chase:") && "requestIdleCallback" in window) {
+    window.requestIdleCallback(persist, { timeout: 800 });
+  } else {
+    persist();
+  }
 }
 
 export function chaseCacheKey(month: string) {

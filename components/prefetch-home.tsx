@@ -1,11 +1,19 @@
 "use client";
 
 import { useEffect } from "react";
-import { prefetchHomeData } from "@/lib/prefetch-home";
+import { prefetchHomeData, seedChasePreview } from "@/lib/prefetch-home";
+import type { ChaseRow } from "@/lib/types";
 
-export function PrefetchHome({ month }: { month?: string }) {
+export function PrefetchHome({
+  month,
+  seed,
+}: {
+  month?: string;
+  seed?: ChaseRow[];
+}) {
   useEffect(() => {
+    if (month && seed?.length) seedChasePreview(month, seed);
     prefetchHomeData(month);
-  }, [month]);
+  }, [month, seed]);
   return null;
 }

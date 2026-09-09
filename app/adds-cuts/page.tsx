@@ -1,13 +1,21 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { ChaseTable, type SortKey } from "@/components/chase-table";
-import { LoadError, SummaryCardSkeleton, TableSkeleton, UpdatingNote } from "@/components/load-ui";
+import { LoadError, SummaryCardSkeleton, TableSkeleton } from "@/components/load-ui";
 import { loadWatchlist, saveWatchlist } from "@/components/ui";
 import { formatNumber, sectorLabel } from "@/lib/format";
-import { chaseCacheKey, sessionCacheGet, sessionCacheSet } from "@/lib/session-cache";
+import { peekMonths } from "@/lib/load-months";
+import { chaseLooksComplete, loadChaseIntoCache } from "@/lib/prefetch-home";
+import {
+  chaseCacheKey,
+  sessionCacheGet,
+  sessionCacheSubscribe,
+} from "@/lib/session-cache";
 import type { ChaseRow } from "@/lib/types";
+
+const EMPTY_ROWS: ChaseRow[] = [];
 
 const SKELETON_COLS = [
   { label: "Stock" },
@@ -26,8 +34,13 @@ function sortValue(row: ChaseRow, key: SortKey): string | number {
   return row[key];
 }
 
-function peekChase(month: string) {
-  return sessionCacheGet<ChaseRow[]>(chaseCacheKey(month)) ?? [];
+function useCachedChase(month: string) {
+  const key = chaseCacheKey(month);
+  return useSyncExternalStore(
+    sessionCacheSubscribe,
+    () => sessionCacheGet<ChaseRow[]>(key) ?? EMPTY_ROWS,
+    () => EMPTY_ROWS,
+  );
 }
 
 function ChaseFallback() {
@@ -53,8 +66,8 @@ function ChaseFallback() {
 
 function ChasePage() {
   const search = useSearchParams();
-  const month = search.get("month") || "";
-  const [allRows, setAllRows] = useState<ChaseRow[]>([]);
+  const month = search.get("month") || peekMonths()[0] || "";
+  const allRows = useCachedChase(month);
   const [error, setError] = useState<string | null>(null);
   const [sector, setSector] = useState("");
   const [minFunds, setMinFunds] = useState("");
@@ -63,89 +76,60 @@ function ChasePage() {
   const [watch, setWatch] = useState<string[]>([]);
   const [sortKey, setSortKey] = useState<SortKey>("net_value_delta_cr");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
-  const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState(false);
+  const [loading, setLoading] = useState(allRows.length === 0);
   const [reload, setReload] = useState(0);
-
-  const load = useCallback(() => {
-    let cancelled = false;
-    const key = chaseCacheKey(month);
-    const hit = sessionCacheGet<ChaseRow[]>(key);
-    if (hit?.length) {
-      queueMicrotask(() => {
-        if (cancelled) return;
-        setAllRows(hit);
-        setError(null);
-        setLoading(false);
-        setUpdating(true);
-      });
-    } else {
-      queueMicrotask(() => {
-        if (cancelled) return;
-        setLoading(true);
-        setUpdating(false);
-      });
-    }
-    const q = new URLSearchParams();
-    if (month) q.set("month", month);
-    fetch(`/api/v1/chase?${q}`)
-      .then(async (r) => {
-        const d = await r.json();
-        if (cancelled) return;
-        const next = (d.rows || []) as ChaseRow[];
-        if (!r.ok && r.status !== 503) {
-          setError(d.error || "Failed to load");
-          if (next.length) setAllRows(next);
-          return;
-        }
-        setError(null);
-        setAllRows(next);
-        if (r.ok) sessionCacheSet(key, next);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        if (!sessionCacheGet<ChaseRow[]>(key)?.length) setError("Failed to load");
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setLoading(false);
-        setUpdating(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [month]);
-
-  useLayoutEffect(() => {
-    const hit = peekChase(month);
-    queueMicrotask(() => {
-      if (hit.length) {
-        setAllRows(hit);
-        setError(null);
-        setLoading(false);
-      } else {
-        setAllRows([]);
-        setLoading(true);
-      }
-    });
-  }, [month]);
-
-  useEffect(() => {
-    function onScroll() {
-      setShowTop(window.scrollY > 500);
-    }
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+  const watched = useMemo(() => new Set(watch), [watch]);
 
   useEffect(() => {
     queueMicrotask(() => setWatch(loadWatchlist()));
   }, []);
 
   useEffect(() => {
-    return load();
-  }, [load, reload]);
+    function onScroll() {
+      const box = document.getElementById("adds-cuts-scroll");
+      const y = box ? box.scrollTop : window.scrollY;
+      setShowTop(y > 400);
+    }
+    onScroll();
+    const box = document.getElementById("adds-cuts-scroll");
+    box?.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      box?.removeEventListener("scroll", onScroll);
+      window.removeEventListener("scroll", onScroll);
+    };
+  }, [allRows.length]);
+
+  useEffect(() => {
+    const hit = reload === 0 ? sessionCacheGet<ChaseRow[]>(chaseCacheKey(month)) : undefined;
+    if (hit?.length) {
+      queueMicrotask(() => {
+        setLoading(false);
+        setError(null);
+      });
+      if (reload === 0 && chaseLooksComplete(hit.length)) return;
+    }
+    let cancelled = false;
+    if (!hit?.length) {
+      queueMicrotask(() => {
+        if (!cancelled) setLoading(true);
+      });
+    }
+    loadChaseIntoCache(month, reload > 0)
+      .then(() => {
+        if (!cancelled) setError(null);
+      })
+      .catch((e) => {
+        if (cancelled || sessionCacheGet<ChaseRow[]>(chaseCacheKey(month))?.length) return;
+        setError(e instanceof Error ? e.message : "Failed to load");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [month, reload]);
 
   const rows = useMemo(() => {
     const min = Number(minFunds) || 0;
@@ -225,16 +209,13 @@ function ChasePage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-medium">Adds & cuts</h1>
-          <p className="mt-1 text-sm text-muted">
-            Active equity funds only. Adds and cuts use share quantity, not weight. Use{" "}
-            <strong>Holdings as of</strong> in the header. Older months may have thinner coverage.
-            Books lag month-end by about ten working days. Click a column header to sort.
-          </p>
-        </div>
-        {updating ? <UpdatingNote /> : null}
+      <div>
+        <h1 className="text-xl font-medium">Adds & cuts</h1>
+        <p className="mt-1 text-sm text-muted">
+          Active equity funds only. Adds and cuts use share quantity, not weight. Use{" "}
+          <strong>Holdings as of</strong> in the header. Older months may have thinner coverage.
+          Books lag month-end by about ten working days. Click a column header to sort.
+        </p>
       </div>
       {error ? <LoadError message={error} onRetry={() => setReload((n) => n + 1)} /> : null}
 
@@ -339,7 +320,7 @@ function ChasePage() {
           month={month}
           sortKey={sortKey}
           sortOrder={sortOrder}
-          watch={watch}
+          watched={watched}
           onSort={onSort}
           onToggleWatch={toggle}
         />
@@ -348,7 +329,10 @@ function ChasePage() {
         <button
           type="button"
           className="fixed right-4 bottom-6 z-40 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted shadow-sm hover:text-foreground"
-          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          onClick={() => {
+            document.getElementById("adds-cuts-scroll")?.scrollTo({ top: 0, behavior: "smooth" });
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
           aria-label="Back to top"
         >
           <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
