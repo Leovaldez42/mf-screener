@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-export function ShareBar({ title, text, url }: { title: string; text: string; url: string }) {
+export function ShareBar({ title, text }: { title: string; text: string; url: string }) {
   const [copied, setCopied] = useState(false);
   const [native, setNative] = useState(false);
   const encoded = encodeURIComponent(text);
@@ -13,7 +13,7 @@ export function ShareBar({ title, text, url }: { title: string; text: string; ur
 
   async function shareNative() {
     try {
-      await navigator.share({ title, text, url });
+      await navigator.share({ title, text });
     } catch {
       /* user cancelled */
     }
@@ -32,18 +32,15 @@ export function ShareBar({ title, text, url }: { title: string; text: string; ur
   const btn =
     "rounded border border-border px-3 py-1 text-sm text-muted hover:border-faint hover:text-foreground";
 
-  if (native) {
-    return (
-      <button type="button" className={btn} onClick={() => void shareNative()}>
-        Share
-      </button>
-    );
-  }
-
   return (
     <div className="flex flex-wrap items-center gap-2">
+      {native ? (
+        <button type="button" className={btn} onClick={() => void shareNative()}>
+          Share
+        </button>
+      ) : null}
       <button type="button" className={btn} onClick={() => void copy()}>
-        {copied ? "Copied" : "Copy link"}
+        {copied ? "Copied" : "Copy"}
       </button>
       <a className={btn} href={`https://wa.me/?text=${encoded}`} target="_blank" rel="noopener noreferrer">
         WhatsApp

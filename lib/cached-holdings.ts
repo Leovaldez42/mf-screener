@@ -160,12 +160,17 @@ async function loadStockPayload(id: string, requestedMonth: string) {
     })
     .sort((a, b) => b.quantity - a.quantity || Math.abs(b.qty_delta) - Math.abs(a.qty_delta));
 
-  const chase = (await getChaseRows(monthToUse)).find((r) => r.stock_id === id);
+  const { data: agg } = await db
+    .from("stock_month_aggregates")
+    .select("fund_count, fund_count_delta, net_qty_delta, net_value_delta_cr")
+    .eq("stock_id", id)
+    .eq("month", monthToUse)
+    .maybeSingle();
   const summary = {
-    fund_count: chase?.fund_count ?? holders.filter((h) => h.quantity > 0).length,
-    fund_count_delta: chase?.fund_count_delta ?? 0,
-    net_qty_delta: chase?.net_qty_delta ?? 0,
-    net_value_delta_cr: chase?.net_value_delta_cr ?? 0,
+    fund_count: agg ? Number(agg.fund_count) : holders.filter((h) => h.quantity > 0).length,
+    fund_count_delta: agg ? Number(agg.fund_count_delta) : 0,
+    net_qty_delta: agg ? Number(agg.net_qty_delta) : 0,
+    net_value_delta_cr: agg ? Number(agg.net_value_delta_cr) : 0,
   };
 
   return { stock, month: monthToUse, history, holders, summary };

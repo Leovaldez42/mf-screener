@@ -64,5 +64,9 @@ export async function GET(req: NextRequest) {
     rows.sort((a, b) => Math.abs(b.net_value_delta_cr) - Math.abs(a.net_value_delta_cr));
   }
 
-  return jsonCached({ month: monthToUse, rows }, HOLDINGS_CACHE_CONTROL);
+  const total = rows.length;
+  const limit = Number(req.nextUrl.searchParams.get("limit") || "0");
+  if (limit > 0 && rows.length > limit) rows = rows.slice(0, limit);
+
+  return jsonCached({ month: monthToUse, rows, total }, HOLDINGS_CACHE_CONTROL);
 }
