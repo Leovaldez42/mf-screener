@@ -131,7 +131,7 @@ export default async function LandingPage() {
               <Link className="text-foreground underline" href="/screener">
                 Screener
               </Link>{" "}
-              filters Direct Growth active-equity by Sharpe, TER, PE, and CAGR vs category.{" "}
+              filters Direct Growth schemes by class (active equity, index, debt, hybrid), then Sharpe, TER, PE, and CAGR vs category.{" "}
               <Link className="text-foreground underline" href="/compare">
                 Compare
               </Link>{" "}

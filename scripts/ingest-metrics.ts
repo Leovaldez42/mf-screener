@@ -1,6 +1,6 @@
 import { readFileSync } from "fs";
 import { resolve } from "path";
-import { rowFromFinapi, type SchemeMetric } from "../lib/scheme-metrics";
+import { keepForScreener, rowFromFinapi, type SchemeMetric } from "../lib/scheme-metrics";
 import { createServiceClient } from "../lib/supabase";
 import { notifyRevalidate } from "../lib/notify-revalidate";
 
@@ -137,7 +137,7 @@ async function main() {
       seen += 1;
       const row = rowFromFinapi(raw);
       if (!row) continue;
-      if (!row.is_direct || !row.is_growth || !row.is_active_equity) continue;
+      if (!keepForScreener(row)) continue;
       batch.push({ ...row, fetched_at: new Date().toISOString() });
       kept += 1;
     }
@@ -152,7 +152,7 @@ async function main() {
     if (START_PAGE <= 1) {
       takePage(first.data?.content || []);
       await flush();
-      console.log(`page 1/${totalPages} seen=${seen} active-direct-growth=${kept} concurrency=${CONCURRENCY}`);
+      console.log(`page 1/${totalPages} seen=${seen} direct-growth=${kept} concurrency=${CONCURRENCY}`);
     } else {
       console.log(`resume from page ${START_PAGE}/${totalPages} (skipping 1-${START_PAGE - 1})`);
     }
@@ -178,7 +178,7 @@ async function main() {
       for (const r of results) takePage(r.content);
       await flush();
       const last = pages[pages.length - 1];
-      console.log(`pages ${pages[0]}-${last}/${totalPages} seen=${seen} active-direct-growth=${kept}`);
+      console.log(`pages ${pages[0]}-${last}/${totalPages} seen=${seen} direct-growth=${kept}`);
       if (DELAY_MS > 0) await sleep(DELAY_MS);
     }
     await flush();
@@ -189,7 +189,7 @@ async function main() {
         finished_at: new Date().toISOString(),
         families_ok: kept,
         families_fail: 0,
-        notes: `scanned ${seen} schemes; upserted ${kept} Direct Growth active-equity`,
+        notes: `scanned ${seen} schemes; upserted ${kept} Direct Growth + listed ETFs`,
       })
       .eq("id", run.id);
     console.log(`done. upserted ${kept} schemes (scanned ${seen}).`);

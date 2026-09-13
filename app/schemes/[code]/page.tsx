@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { classShowsPe, parseAssetClass } from "@/lib/fund-class";
 import { type CategoryAverage, type SchemeMetric } from "@/lib/scheme-metrics";
 import { formatDelta, formatNumber } from "@/lib/format";
 
@@ -28,9 +29,10 @@ export default function SchemePage() {
   if (error) return <p className="text-sm text-amber-400">{error}</p>;
   if (!scheme) return <p className="text-sm text-faint">Loading…</p>;
 
+  const assetClass = parseAssetClass(scheme.asset_class);
   const stats: { label: string; key: keyof SchemeMetric; invert?: boolean; digits: number }[] = [
     { label: "Expense ratio %", key: "expense_ratio", invert: true, digits: 2 },
-    { label: "PE", key: "pe", invert: true, digits: 2 },
+    ...(classShowsPe(assetClass) ? [{ label: "PE", key: "pe" as const, invert: true, digits: 2 }] : []),
     { label: "Sharpe 1Y", key: "sharpe_1y", digits: 2 },
     { label: "Sharpe 3Y", key: "sharpe_3y", digits: 2 },
     { label: "Sharpe 5Y", key: "sharpe_5y", digits: 2 },
@@ -87,12 +89,16 @@ export default function SchemePage() {
         })}
       </div>
       <p className="text-sm text-faint">
-        <Link className="underline" href={`/funds/${scheme.scheme_code}`}>
-          Holdings book
-        </Link>
-        {" — "}
-        available for every Direct Growth active-equity scheme after holdings ingest.
-        {" · "}
+        {assetClass === "equity-active" ? (
+          <>
+            <Link className="underline" href={`/funds/${scheme.scheme_code}`}>
+              Holdings book
+            </Link>
+            {" — monthly adds and cuts for active-equity schemes. "}
+          </>
+        ) : (
+          <>Adds & cuts books are only for active-equity schemes. </>
+        )}
         <Link className="underline" href="/screener">
           Back to screener
         </Link>

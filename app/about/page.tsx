@@ -12,8 +12,10 @@ export default function AboutPage() {
       <div>
         <h1 className="text-xl font-medium text-foreground">About</h1>
         <p className="mt-2">
-          MF Chase is a research tool for Indian <strong className="font-medium text-foreground">active-equity</strong>{" "}
-          mutual funds. It is not a broker, not a recommendation engine, and not investment advice.
+          MF Chase is a research tool for Indian mutual funds.{" "}
+          <strong className="font-medium text-foreground">Adds & cuts</strong> covers active-equity portfolio books.{" "}
+          <strong className="font-medium text-foreground">Screener</strong> covers Direct Growth schemes across classes.
+          It is not a broker, not a recommendation engine, and not investment advice.
         </p>
       </div>
 
@@ -34,9 +36,8 @@ export default function AboutPage() {
             <Link className="text-foreground underline" href="/compare">
               Compare
             </Link>{" "}
-            — Direct Growth plans only, with Sharpe, TER, PE, and CAGR.
+            — Direct Growth plans by class (active equity, index, debt, hybrid, other), with Sharpe, TER, PE, and CAGR.
           </li>
-          <li>Index funds, ETFs, gold, and debt are skipped.</li>
         </ul>
       </section>
 
@@ -57,8 +58,8 @@ export default function AboutPage() {
       <section>
         <h2 className="text-base font-medium text-foreground">Source</h2>
         <p className="mt-2">
-          Holdings and scheme metrics come from FinAPI (top funds by AUM). There is no login. Watchlists stay in this
-          browser.
+          Holdings and scheme metrics come from FinAPI. Monthly books are ingested for active-equity schemes only.
+          There is no login. Watchlists stay in this browser.
         </p>
       </section>
 

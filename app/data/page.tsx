@@ -32,8 +32,9 @@ export default function DataPage() {
     <div className="space-y-4">
       <h1 className="text-xl font-medium">Data</h1>
       <p className="text-sm text-muted">
-        Ingest is a separate process. Holdings: <code>npm run ingest</code> via FinAPI.
-        Metrics (screener): <code>npm run ingest:metrics</code>. The browser never calls FinAPI.
+        Ingest is a separate process. Metrics (all Direct Growth classes):{" "}
+        <code>npm run ingest:metrics</code>. Holdings (active equity only): <code>npm run ingest</code>.
+        The browser never calls FinAPI.
       </p>
       {error ? <p className="text-sm text-amber-400">{error}</p> : null}
       <table className="w-full text-left text-sm">
