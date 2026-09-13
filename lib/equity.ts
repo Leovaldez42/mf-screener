@@ -1,4 +1,4 @@
-/** AMFI-style active equity categories. Index / ETF / debt / gold are excluded. */
+/** AMFI-style active equity categories. Index / ETF / debt / gold are excluded (see lib/fund-class.ts). */
 export const ACTIVE_EQUITY_CATEGORY_NEEDLES = [
   "flexi cap",
   "multi cap",

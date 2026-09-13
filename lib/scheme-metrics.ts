@@ -1,3 +1,4 @@
+import { assetClassFromCategory, isListedEtf, type AssetClassId } from "./fund-class";
 import { isActiveEquityCategory, slugifyAmc } from "./equity";
 
 export type SchemeMetric = {
@@ -11,6 +12,7 @@ export type SchemeMetric = {
   is_direct: boolean;
   is_growth: boolean;
   is_active_equity: boolean;
+  asset_class: AssetClassId;
   aum_cr: number | null;
   expense_ratio: number | null;
   pe: number | null;
@@ -49,9 +51,22 @@ export function isDirectPlan(planName: string | null | undefined): boolean {
 
 export function isGrowthOption(optionName: string | null | undefined): boolean {
   const o = (optionName || "").toLowerCase();
-  if (!o.includes("growth")) return false;
   if (o.includes("idcw") || o.includes("dividend")) return false;
+  if (!o.includes("growth")) return false;
   return true;
+}
+
+export function keepForScreener(row: {
+  name: string;
+  category: string;
+  option_name: string | null;
+  is_direct: boolean;
+  is_growth: boolean;
+}): boolean {
+  const option = (row.option_name || "").toLowerCase();
+  if (option.includes("idcw") || option.includes("dividend")) return false;
+  if (isListedEtf(row.name, row.category)) return true;
+  return row.is_direct && row.is_growth;
 }
 
 export function rowFromFinapi(raw: Record<string, unknown>): SchemeMetric | null {
@@ -66,6 +81,9 @@ export function rowFromFinapi(raw: Record<string, unknown>): SchemeMetric | null
   const cagr = (raw.cagr || {}) as Record<string, unknown>;
   const rm = (raw.riskMetrics || {}) as Record<string, { timeframes?: Timeframe[] }>;
   const fundamentals = (raw.fundamentals || {}) as Record<string, unknown>;
+  const listedEtf = isListedEtf(name, category);
+  const optionLower = (option_name || "").toLowerCase();
+  const idcw = optionLower.includes("idcw") || optionLower.includes("dividend");
 
   return {
     scheme_code,
@@ -75,9 +93,10 @@ export function rowFromFinapi(raw: Record<string, unknown>): SchemeMetric | null
     category,
     plan_name,
     option_name,
-    is_direct: isDirectPlan(plan_name),
-    is_growth: isGrowthOption(option_name),
+    is_direct: isDirectPlan(plan_name) || listedEtf,
+    is_growth: listedEtf ? !idcw : isGrowthOption(option_name),
     is_active_equity: isActiveEquityCategory(category),
+    asset_class: assetClassFromCategory(category, name),
     aum_cr: parseNum(raw.aum),
     expense_ratio: parseNum(raw.expenseRatio ?? raw.totalExpensesRatio),
     pe: parseNum(fundamentals.pe),

@@ -1,14 +1,14 @@
 # MF Chase
 
-Research tool for **Indian active-equity mutual funds**: monthly adds and cuts (by share count), plus a fund screener and compare.
+Research tool for **Indian mutual funds**: monthly adds and cuts for active-equity books (by share count), plus a fund screener and compare across classes.
 
-Not a broker. Not investment advice. Index funds, ETFs, gold, and debt are skipped.
+Not a broker. Not investment advice.
 
 ## Product
 
 - **`/`** — landing
-- **Adds & cuts** (`/adds-cuts`) — what funds bought more of or sold between monthly books. `/chase` redirects here.
-- **Screener / Compare** — Direct Growth plans; filter and compare by house, Sharpe, PE, TER, CAGR
+- **Adds & cuts** (`/adds-cuts`) — what active-equity funds bought more of or sold between monthly books. `/chase` redirects here.
+- **Screener / Compare** — Direct Growth plans by class (active equity, index / ETF, debt, hybrid, other); filter and compare by house, Sharpe, PE, TER, CAGR. Compare stays within one class.
 - **Sectors / Watchlist / About**
 - Holdings land about **ten working days after month-end**. Until then the table shows the last complete book. Adds and cuts are shares, not weight.
 - **No login.** Watchlist and compare selection stay in `localStorage`. The browser never calls FinAPI.
@@ -22,17 +22,18 @@ JSON for the UI (and anything else) is under `/api/v1`. Holdings rows are still 
    - [`supabase/migrations/20260829000000_init.sql`](supabase/migrations/20260829000000_init.sql)
    - [`supabase/migrations/20260829010000_scheme_metrics.sql`](supabase/migrations/20260829010000_scheme_metrics.sql)
    - [`supabase/migrations/20260903000000_scheme_metrics_pe.sql`](supabase/migrations/20260903000000_scheme_metrics_pe.sql) (adds `pe`; existing projects only need this file)
+   - [`supabase/migrations/20260913000000_scheme_metrics_asset_class.sql`](supabase/migrations/20260913000000_scheme_metrics_asset_class.sql) (adds `asset_class`; existing projects only need this file)
 3. Copy [`.env.example`](.env.example) to `.env.local` and fill keys (including `FINAPI_API_KEY`).
 4. Install and run:
 
 ```bash
 npm install
-npm run ingest:metrics   # FinAPI → scheme_metrics (screener)
-npm run ingest           # FinAPI → holdings for every screener scheme, 12 months
+npm run ingest:metrics   # FinAPI → scheme_metrics (all Direct Growth classes)
+npm run ingest           # FinAPI → holdings for active-equity schemes only, 12 months
 npm run dev              # http://localhost:3000
 ```
 
-Default holdings ingest is **all** Direct Growth active-equity schemes in `scheme_metrics` (`INGEST_HOLDINGS_LIMIT=0`) and **12 months**. Already-ingested funds are skipped unless `INGEST_HOLDINGS_SKIP_EXISTING=0`. Requires `ingest:metrics` first. The old mfdata worker is `npm run ingest:mfdata`.
+Metrics ingest upserts **all Direct Growth** schemes, plus listed ETFs (they have no Direct/Growth plan in AMFI). Holdings ingest is **active-equity only** (`is_active_equity`) with `INGEST_HOLDINGS_LIMIT=0` by default. Already-ingested funds are skipped unless `INGEST_HOLDINGS_SKIP_EXISTING=0`. Requires `ingest:metrics` first. The old mfdata worker is `npm run ingest:mfdata`.
 
 Months in the Holdings as of dropdown are whatever exists in Supabase snapshots/aggregates. If FinAPI has no older books, a retry will not invent them.
 
