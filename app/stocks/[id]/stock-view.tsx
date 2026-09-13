@@ -151,7 +151,14 @@ function StockPage() {
         <div className="flex flex-wrap items-center justify-end gap-3">
           {updating ? <UpdatingNote /> : null}
           <ShareBar title={data.stock?.display_name || "MF Chase"} text={shareText} url={shareUrl} />
-          <button className="rounded border border-border px-3 py-1 text-sm" onClick={toggle}>
+          <button
+            className={`rounded border px-3 py-1 text-sm ${
+              watch.includes(id)
+                ? "border-foreground bg-foreground text-background"
+                : "border-border text-muted hover:text-foreground"
+            }`}
+            onClick={toggle}
+          >
             {watch.includes(id) ? "Watched" : "Watch"}
           </button>
         </div>

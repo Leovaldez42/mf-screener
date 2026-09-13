@@ -1,12 +1,19 @@
 import { NextRequest } from "next/server";
-import { getScreenerUniverse } from "@/lib/cached-metrics";
-import { CATEGORY_STYLES, categoryStyleOrFilter } from "@/lib/equity";
-import { METRICS_CACHE_CONTROL, jsonCached, jsonNoStore } from "@/lib/http-cache";
 import {
-  equalWeightCategoryAverages,
-  SORTABLE,
-  type SortKey,
-} from "@/lib/scheme-metrics";
+  getScreenerUniverse,
+  styleAverageForClass,
+  universeForClass,
+} from "@/lib/cached-metrics";
+import {
+  CLASS_STYLES,
+  classStylesOrFilter,
+  parseAssetClass,
+  parseStyleIds,
+  searchNeedles,
+  styleMatchOrFilter,
+} from "@/lib/fund-class";
+import { METRICS_CACHE_CONTROL, jsonCached, jsonNoStore } from "@/lib/http-cache";
+import { SORTABLE, type SortKey } from "@/lib/scheme-metrics";
 import { createAnonClient, supabaseConfigured } from "@/lib/supabase";
 
 export const revalidate = 120;
@@ -16,10 +23,11 @@ export async function GET(req: NextRequest) {
     return jsonNoStore({ error: "supabase_not_configured" }, 503);
   }
   const sp = req.nextUrl.searchParams;
+  const assetClass = parseAssetClass(sp.get("class"));
   const q = (sp.get("q") || "").replace(/[%(),]/g, "").trim().slice(0, 80);
   const house = (sp.get("house") || "").trim();
   const category = (sp.get("category") || "").trim();
-  const style = (sp.get("style") || "").trim();
+  const styleIds = parseStyleIds(sp.get("style") || sp.get("styles"));
   const minSharpe = sp.get("minSharpe");
   const maxExpense = sp.get("maxExpense");
   const maxPe = sp.get("maxPe");
@@ -37,16 +45,22 @@ export async function GET(req: NextRequest) {
     .from("scheme_metrics")
     .select("*")
     .eq("is_direct", true)
-    .eq("is_growth", true)
-    .eq("is_active_equity", true);
+    .eq("is_growth", true);
+
+  const classParam = sp.get("class");
+  const browseAll = classParam === "all";
+  const searchAllClasses = Boolean(q) || browseAll;
+  if (!searchAllClasses) query = query.eq("asset_class", assetClass);
 
   if (house) query = query.eq("fund_house", house);
-  const needles = categoryStyleOrFilter(style);
-  if (needles.length === 1) query = query.ilike("category", `%${needles[0]}%`);
-  else if (needles.length > 1) {
-    query = query.or(needles.map((n) => `category.ilike.%${n}%`).join(","));
-  } else if (category) query = query.ilike("category", `%${category}%`);
-  if (q) query = query.or(`name.ilike.%${q}%,fund_house.ilike.%${q}%`);
+  const styleClass = browseAll ? "equity-active" : assetClass;
+  const needles = classStylesOrFilter(styleClass, styleIds);
+  if (needles.length) query = query.or(styleMatchOrFilter(needles));
+  else if (category && !browseAll) query = query.ilike("category", `%${category}%`);
+  if (q) {
+    const ors = searchNeedles(q).flatMap((n) => [`name.ilike.%${n}%`, `fund_house.ilike.%${n}%`]);
+    query = query.or(ors.join(","));
+  }
   if (minSharpe) query = query.gte("sharpe_3y", Number(minSharpe));
   if (maxExpense) query = query.lte("expense_ratio", Number(maxExpense));
   if (maxPe) query = query.lte("pe", Number(maxPe));
@@ -69,29 +83,27 @@ export async function GET(req: NextRequest) {
     return jsonNoStore({ error: e instanceof Error ? e.message : "schemes_failed" }, 500);
   }
 
-  let styleAverage = null;
-  if (needles.length) {
-    const stylePeers = universe.peers.filter((r) => {
-      const c = (r.category || "").toLowerCase();
-      return needles.some((n) => c.includes(n));
-    });
-    const grouped = equalWeightCategoryAverages(
-      stylePeers.map((r) => ({ ...r, category: "__style__" })),
-    );
-    styleAverage = grouped["__style__"]
-      ? { ...grouped["__style__"], category: style, n: stylePeers.length }
-      : null;
-  }
+  const scoped = universeForClass(universe.peers, assetClass);
+  const allHouses = [...new Set(universe.peers.map((r) => String(r.fund_house)).filter(Boolean))].sort();
+  const stylePeers = browseAll ? universe.peers : scoped.peers;
+  const styleAverage = styleIds.length
+    ? styleAverageForClass(stylePeers, browseAll ? "equity-active" : assetClass, styleIds)
+    : null;
+  const styles = browseAll
+    ? CLASS_STYLES["equity-active"].map((s) => ({ id: s.id, label: s.label }))
+    : scoped.styles;
 
   return jsonCached(
     {
       schemes: data || [],
-      houses: universe.houses,
-      styles: CATEGORY_STYLES.map((s) => ({ id: s.id, label: s.label })),
-      categoryAverages: universe.categoryAverages,
+      class: searchAllClasses ? "all" : assetClass,
+      searchAllClasses,
+      houses: browseAll ? allHouses : scoped.houses,
+      styles,
+      categoryAverages: scoped.categoryAverages,
       styleAverage,
       total: (data || []).length,
-      universe: universe.universe,
+      universe: searchAllClasses ? universe.universe : scoped.universe,
     },
     METRICS_CACHE_CONTROL,
   );

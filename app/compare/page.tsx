@@ -4,11 +4,13 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { COMPARE_MAX, type SchemeMetric } from "@/lib/scheme-metrics";
+import { assetClassMeta, parseAssetClass } from "@/lib/fund-class";
 import { formatNumber } from "@/lib/format";
 import { loadCompare, saveCompare } from "@/components/ui";
 
-const ROWS: { key: keyof SchemeMetric; label: string; digits?: number }[] = [
+const METRIC_ROWS: { key: keyof SchemeMetric; label: string; digits?: number }[] = [
   { key: "fund_house", label: "Fund house" },
+  { key: "asset_class", label: "Class" },
   { key: "category", label: "Category" },
   { key: "expense_ratio", label: "Expense ratio %", digits: 2 },
   { key: "pe", label: "PE", digits: 2 },
@@ -26,6 +28,7 @@ const ROWS: { key: keyof SchemeMetric; label: string; digits?: number }[] = [
 ];
 
 function cell(s: SchemeMetric, key: keyof SchemeMetric, digits?: number) {
+  if (key === "asset_class") return assetClassMeta(parseAssetClass(s.asset_class)).label;
   const v = s[key];
   if (typeof v === "number") return formatNumber(v, digits ?? 2);
   if (typeof v === "string" && v) return v;
@@ -52,8 +55,12 @@ function CompareInner() {
     fetch(`/api/v1/schemes/compare?codes=${codes.join(",")}`)
       .then(async (r) => {
         const d = await r.json();
-        if (!r.ok) setError(d.error || "Could not compare");
-        else setError(null);
+        if (!r.ok) {
+          setError(d.message || d.error || "Could not compare");
+          setFetchedSchemes([]);
+          return;
+        }
+        setError(null);
         setFetchedSchemes(d.schemes || []);
       })
       .catch(() => setError("Could not compare"));
@@ -62,7 +69,7 @@ function CompareInner() {
   useEffect(() => {
     if (q.trim().length < 2) return;
     const t = setTimeout(() => {
-      fetch(`/api/v1/schemes?q=${encodeURIComponent(q.trim())}&limit=12&sort=aum_cr`)
+      fetch(`/api/v1/schemes?q=${encodeURIComponent(q.trim())}&limit=12&sort=aum_cr&class=all`)
         .then((r) => r.json())
         .then((d) => setFetchedHits(d.schemes || []))
         .catch(() => setFetchedHits([]));
@@ -93,7 +100,8 @@ function CompareInner() {
       <div>
         <h1 className="text-xl font-medium">Compare funds</h1>
         <p className="text-sm text-muted">
-          Search and add up to {COMPARE_MAX} Direct Growth schemes. Open a fund from the{" "}
+          Search and add up to {COMPARE_MAX} Direct Growth schemes — any class. PE is blank where it does not
+          apply. Open a fund from the{" "}
           <Link className="underline" href="/screener">
             screener
           </Link>{" "}
@@ -101,15 +109,15 @@ function CompareInner() {
         </p>
       </div>
 
-      <div className="relative max-w-xl">
+      <div className="relative z-30 max-w-xl">
         <input
           className="w-full rounded border border-border bg-input px-3 py-2 text-sm"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Type a fund name or AMC…"
+          placeholder="Name or AMC…"
         />
         {hits.length > 0 ? (
-          <ul className="absolute z-10 mt-1 max-h-64 w-full overflow-auto rounded border border-border bg-input text-sm">
+          <ul className="absolute z-50 mt-1 max-h-64 w-full overflow-auto rounded border border-border bg-card text-sm shadow-sm">
             {hits.map((h) => (
               <li key={h.scheme_code}>
                 <button
@@ -119,7 +127,7 @@ function CompareInner() {
                 >
                   <div>{h.name}</div>
                   <div className="text-xs text-faint">
-                    {h.fund_house} · {h.category}
+                    {assetClassMeta(parseAssetClass(h.asset_class)).label} · {h.fund_house} · {h.category}
                   </div>
                 </button>
               </li>
@@ -168,7 +176,7 @@ function CompareInner() {
                   {s.name}
                 </Link>
                 <dl className="mt-2 space-y-1 text-sm">
-                  {ROWS.map((row) => (
+                  {METRIC_ROWS.map((row) => (
                     <div key={row.key} className="flex justify-between gap-3">
                       <dt className="text-faint">{row.label}</dt>
                       <dd>{cell(s, row.key, row.digits)}</dd>
@@ -182,7 +190,7 @@ function CompareInner() {
             <table className="w-full text-left text-sm">
               <thead className="text-faint">
                 <tr>
-                  <th className="sticky left-0 z-10 bg-background py-2 pr-3 font-normal w-40">Metric</th>
+                  <th className="sticky left-0 z-0 w-40 bg-background py-2 pr-3 font-normal">Metric</th>
                   {schemes.map((s) => (
                     <th key={s.scheme_code} className="py-2 pr-3 font-normal align-bottom">
                       <Link className="text-foreground hover:underline" href={`/schemes/${s.scheme_code}`}>
@@ -193,9 +201,9 @@ function CompareInner() {
                 </tr>
               </thead>
               <tbody>
-                {ROWS.map((row) => (
+                {METRIC_ROWS.map((row) => (
                   <tr key={row.key} className="border-t border-border">
-                    <td className="sticky left-0 z-10 bg-background py-2 pr-3 text-muted">{row.label}</td>
+                    <td className="sticky left-0 z-0 bg-background py-2 pr-3 text-muted">{row.label}</td>
                     {schemes.map((s) => (
                       <td key={s.scheme_code} className="py-2 pr-3">
                         {cell(s, row.key, row.digits)}

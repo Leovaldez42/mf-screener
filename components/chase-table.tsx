@@ -51,7 +51,6 @@ export function ChaseTable({
   }, [rows.length]);
 
   // TanStack Virtual cannot be memoized; this component is opted out via "use no memo".
-  // eslint-disable-next-line react-hooks/incompatible-library -- virtualizer returns unstable functions
   const virtualizer = useWindowVirtualizer({
     count: rows.length,
     estimateSize: () => ROW_H,
@@ -87,11 +86,15 @@ export function ChaseTable({
       <div aria-hidden style={{ height: paddingTop }} />
       {items.map((virtualRow) => {
         const r = rows[virtualRow.index];
+        const on = watched.has(r.stock_id);
         return (
-          <div key={r.stock_id} className={`${ROW_GRID} border-t border-border`}>
+          <div
+            key={r.stock_id}
+            className={`${ROW_GRID} border-t border-border ${on ? "bg-surface" : ""}`}
+          >
             <div className="min-w-0">
               <Link
-                className="block truncate hover:underline"
+                className={`block truncate hover:underline ${on ? "font-medium" : ""}`}
                 href={`/stocks/${r.stock_id}?month=${month}`}
                 title={r.display_name}
               >
@@ -110,10 +113,15 @@ export function ChaseTable({
             <div>
               <button
                 type="button"
-                className="w-19 rounded border border-border px-2 py-0.5 text-xs text-muted hover:border-faint hover:text-foreground"
+                aria-pressed={on}
+                className={`w-19 rounded border px-2 py-0.5 text-xs ${
+                  on
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border text-muted hover:border-faint hover:text-foreground"
+                }`}
                 onClick={() => onToggleWatch(r.stock_id)}
               >
-                {watched.has(r.stock_id) ? "Watched" : "Watch"}
+                {on ? "Watched" : "Watch"}
               </button>
             </div>
           </div>
