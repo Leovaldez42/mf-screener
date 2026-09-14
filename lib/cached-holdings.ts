@@ -3,6 +3,7 @@ import { listCompleteMonths, listFamilyMonths } from "@/lib/holdings-month";
 import { CACHE_TAG_HOLDINGS, HOLDINGS_REVALIDATE_SEC } from "@/lib/http-cache";
 import { asOne } from "@/lib/rel";
 import { createAnonClient, fetchAllRows } from "@/lib/supabase";
+import { isJunkHolding } from "@/lib/chase-clean";
 import type { ChaseRow } from "@/lib/types";
 
 type AggRow = {
@@ -44,6 +45,18 @@ function aggToChaseRow(r: AggRow): ChaseRow {
 
 const PREVIEW_SELECT =
   "stock_id, fund_count, fund_count_delta, net_qty_delta, net_value_delta_cr, median_weight_pct, stocks(display_name, sector)";
+const PREVIEW_POOL = 40;
+
+function takeEquityPreview(rows: AggRow[] | null, n: number): ChaseRow[] {
+  const out: ChaseRow[] = [];
+  for (const raw of rows || []) {
+    const row = aggToChaseRow(raw);
+    if (isJunkHolding(row.display_name, row.sector)) continue;
+    out.push(row);
+    if (out.length >= n) break;
+  }
+  return out;
+}
 
 async function loadChasePreview(month: string): Promise<{ inflows: ChaseRow[]; outflows: ChaseRow[] }> {
   const db = createAnonClient();
@@ -54,24 +67,24 @@ async function loadChasePreview(month: string): Promise<{ inflows: ChaseRow[]; o
       .eq("month", month)
       .gt("net_value_delta_cr", 0)
       .order("net_value_delta_cr", { ascending: false })
-      .limit(3),
+      .limit(PREVIEW_POOL),
     db
       .from("stock_month_aggregates")
       .select(PREVIEW_SELECT)
       .eq("month", month)
       .lt("net_value_delta_cr", 0)
       .order("net_value_delta_cr", { ascending: true })
-      .limit(3),
+      .limit(PREVIEW_POOL),
   ]);
   if (up.error) throw new Error(up.error.message);
   if (down.error) throw new Error(down.error.message);
   return {
-    inflows: (up.data || []).map((r) => aggToChaseRow(r as AggRow)),
-    outflows: (down.data || []).map((r) => aggToChaseRow(r as AggRow)),
+    inflows: takeEquityPreview((up.data || []) as AggRow[], 3),
+    outflows: takeEquityPreview((down.data || []) as AggRow[], 3),
   };
 }
 
-export const getChasePreview = unstable_cache(loadChasePreview, ["chase-preview"], {
+export const getChasePreview = unstable_cache(loadChasePreview, ["chase-preview", "equity-only"], {
   revalidate: HOLDINGS_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS],
 });
