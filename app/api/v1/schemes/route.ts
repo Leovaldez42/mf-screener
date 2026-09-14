@@ -76,6 +76,31 @@ export async function GET(req: NextRequest) {
   const { data, error } = await query;
   if (error) return jsonNoStore({ error: error.message }, 500);
 
+  let countQuery = db
+    .from("scheme_metrics")
+    .select("scheme_code", { count: "exact", head: true })
+    .eq("is_direct", true)
+    .eq("is_growth", true);
+  if (!searchAllClasses) countQuery = countQuery.eq("asset_class", assetClass);
+  if (house) countQuery = countQuery.eq("fund_house", house);
+  if (needles.length) countQuery = countQuery.or(styleMatchOrFilter(needles));
+  else if (category && !browseAll) countQuery = countQuery.ilike("category", `%${category}%`);
+  if (q) {
+    const ors = searchNeedles(q).flatMap((n) => [`name.ilike.%${n}%`, `fund_house.ilike.%${n}%`]);
+    countQuery = countQuery.or(ors.join(","));
+  }
+  if (minSharpe) countQuery = countQuery.gte("sharpe_3y", Number(minSharpe));
+  if (maxExpense) countQuery = countQuery.lte("expense_ratio", Number(maxExpense));
+  if (maxPe) countQuery = countQuery.lte("pe", Number(maxPe));
+  if (minCagr1y) countQuery = countQuery.gte("cagr_1y", Number(minCagr1y));
+  if (minCagr3y) countQuery = countQuery.gte("cagr_3y", Number(minCagr3y));
+  if (minCagrInception) countQuery = countQuery.gte("cagr_inception", Number(minCagrInception));
+  if (minAum) countQuery = countQuery.gte("aum_cr", Number(minAum));
+  if (maxAum) countQuery = countQuery.lte("aum_cr", Number(maxAum));
+  const { count: matchedCount, error: countErr } = await countQuery;
+  if (countErr) return jsonNoStore({ error: countErr.message }, 500);
+  const matched = matchedCount ?? (data || []).length;
+
   let universe;
   try {
     universe = await getScreenerUniverse();
@@ -103,7 +128,8 @@ export async function GET(req: NextRequest) {
       categoryAverages: scoped.categoryAverages,
       styleAverage,
       total: (data || []).length,
-      universe: searchAllClasses ? universe.universe : scoped.universe,
+      matched,
+      universe: Math.max(matched, (data || []).length),
     },
     METRICS_CACHE_CONTROL,
   );

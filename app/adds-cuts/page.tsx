@@ -6,7 +6,7 @@ import { ChaseTable, type SortKey } from "@/components/chase-table";
 import { LoadError, SummaryCardSkeleton, TableSkeleton } from "@/components/load-ui";
 import { loadWatchlist, saveWatchlist } from "@/components/ui";
 import { formatNumber, sectorLabel } from "@/lib/format";
-import { peekMonths } from "@/lib/load-months";
+import { loadMonths, peekCoverage, peekMonths } from "@/lib/load-months";
 import { chaseLooksComplete, loadChaseIntoCache } from "@/lib/prefetch-home";
 import {
   chaseCacheKey,
@@ -19,10 +19,10 @@ const EMPTY_ROWS: ChaseRow[] = [];
 
 const SKELETON_COLS = [
   { label: "Stock" },
-  { label: "Sector", hide: "hidden sm:table-cell" },
-  { label: "Funds" },
-  { label: "Net qty", hide: "hidden md:table-cell" },
   { label: "Net ₹ cr" },
+  { label: "Funds" },
+  { label: "Sector", hide: "hidden sm:table-cell" },
+  { label: "Net qty", hide: "hidden md:table-cell" },
   { label: "Median wt %", hide: "hidden sm:table-cell" },
   { label: "" },
 ];
@@ -50,8 +50,8 @@ function ChaseFallback() {
         <h1 className="text-xl font-medium">Adds & cuts</h1>
         <p className="mt-1 text-sm text-muted">
           Active equity funds only. Adds and cuts use share quantity, not weight. Use{" "}
-          <strong>Holdings as of</strong> in the header. Older months may have thinner coverage.
-          Books lag month-end by about ten working days. Click a column header to sort.
+          <strong>Holdings as of</strong> in the header. Books lag month-end by about ten working
+          days. Click a column header to sort.
         </p>
       </div>
       <div className="grid gap-2 sm:grid-cols-3">
@@ -78,11 +78,26 @@ function ChasePage() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [loading, setLoading] = useState(allRows.length === 0);
   const [reload, setReload] = useState(0);
+  const [coveragePct, setCoveragePct] = useState<number | null>(null);
   const watched = useMemo(() => new Set(watch), [watch]);
 
   useEffect(() => {
     queueMicrotask(() => setWatch(loadWatchlist()));
   }, []);
+
+  useEffect(() => {
+    loadMonths()
+      .then((months) => {
+        const latest = months[0] || peekMonths()[0];
+        if (!month || !latest || month !== latest) {
+          setCoveragePct(null);
+          return;
+        }
+        const c = peekCoverage()[latest];
+        setCoveragePct(c && c.total > 0 ? c.pct : null);
+      })
+      .catch(() => setCoveragePct(null));
+  }, [month]);
 
   useEffect(() => {
     function onScroll() {
@@ -199,6 +214,8 @@ function ChasePage() {
   }
 
   const showSkeleton = loading && allRows.length === 0 && !error;
+  const coverageWarn = coveragePct != null && coveragePct < 100 ? `${coveragePct}% of AMCs` : null;
+  const filtersOn = Boolean(sector || minFunds || stockQ.trim());
 
   return (
     <div className="space-y-4">
@@ -206,10 +223,15 @@ function ChasePage() {
         <h1 className="text-xl font-medium">Adds & cuts</h1>
         <p className="mt-1 text-sm text-muted">
           Active equity funds only. Adds and cuts use share quantity, not weight. Use{" "}
-          <strong>Holdings as of</strong> in the header. Older months may have thinner coverage.
-          Books lag month-end by about ten working days. Click a column header to sort.
+          <strong>Holdings as of</strong> in the header. Books lag month-end by about ten working
+          days. Click a column header to sort.
         </p>
       </div>
+      {coverageWarn ? (
+        <div className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground">
+          Incomplete AMC set for this month ({coverageWarn}). Figures can shift as remaining books land.
+        </div>
+      ) : null}
       {error ? <LoadError message={error} onRetry={() => setReload((n) => n + 1)} /> : null}
 
       <div className="grid gap-2 sm:grid-cols-3">
@@ -221,7 +243,7 @@ function ChasePage() {
           </>
         ) : (
           <>
-            <div className="rounded border border-border bg-card px-3 py-2">
+            <div className="rounded-lg border border-border bg-card px-3 py-2">
               <div className="text-xs uppercase tracking-[0.12em] text-faint">Biggest inflow</div>
               <div className="mt-1 truncate text-sm font-medium text-foreground">
                 {summary.inflow ? summary.inflow.display_name : "—"}
@@ -235,7 +257,7 @@ function ChasePage() {
               </div>
             </div>
 
-            <div className="rounded border border-border bg-card px-3 py-2">
+            <div className="rounded-lg border border-border bg-card px-3 py-2">
               <div className="text-xs uppercase tracking-[0.12em] text-faint">Biggest outflow</div>
               <div className="mt-1 truncate text-sm font-medium text-foreground">
                 {summary.outflow ? summary.outflow.display_name : "—"}
@@ -249,7 +271,7 @@ function ChasePage() {
               </div>
             </div>
 
-            <div className="rounded border border-border bg-card px-3 py-2">
+            <div className="rounded-lg border border-border bg-card px-3 py-2">
               <div className="text-xs uppercase tracking-[0.12em] text-faint">Sector signal</div>
               <div className="mt-1 truncate text-sm font-medium text-foreground">
                 {summary.leadingSector ? summary.leadingSector.name : "—"}
@@ -267,7 +289,7 @@ function ChasePage() {
         )}
       </div>
 
-      <div className="flex flex-wrap gap-3 text-sm">
+      <div className="flex flex-wrap items-center gap-3 text-sm">
         <label className="flex items-center gap-2">
           Sector
           <select
@@ -275,8 +297,8 @@ function ChasePage() {
             value={sector}
             onChange={(e) => setSector(e.target.value)}
           >
-            <option value="">All</option>
-            {sectors.map((s) => (
+            <option value="">All sectors</option>
+            {sectors.filter((s) => s !== "Unknown").map((s) => (
               <option key={s} value={s}>
                 {s}
               </option>
@@ -289,7 +311,7 @@ function ChasePage() {
             className="w-20 rounded border border-border bg-input px-2 py-1"
             value={minFunds}
             onChange={(e) => setMinFunds(e.target.value)}
-            placeholder="Any"
+            placeholder="All"
             inputMode="numeric"
           />
         </label>
@@ -304,6 +326,19 @@ function ChasePage() {
             autoComplete="off"
           />
         </label>
+        {filtersOn ? (
+          <button
+            type="button"
+            className="text-sm text-muted underline hover:text-foreground"
+            onClick={() => {
+              setSector("");
+              setMinFunds("");
+              setStockQ("");
+            }}
+          >
+            Clear filters
+          </button>
+        ) : null}
       </div>
       {showSkeleton ? (
         <TableSkeleton columns={SKELETON_COLS} rows={12} />

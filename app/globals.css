@@ -1,6 +1,21 @@
 @import "tailwindcss";
 
-:root {
+/* Live thinkbrew.in zinc — dark is default. Cobalt only on the T-mark dot. */
+html {
+  color-scheme: dark;
+  --background: #09090b;
+  --foreground: #fafafa;
+  --muted: #d4d4d8;
+  --faint: #a1a1aa;
+  --border: #3f3f46;
+  --card: #18181b;
+  --input: #18181b;
+  --surface: #27272a;
+  --gain: #4ade80;
+  --loss: #fb7185;
+}
+
+html:not(.dark) {
   color-scheme: light;
   --background: #f7f7f5;
   --foreground: #18181b;
@@ -12,20 +27,6 @@
   --surface: #f4f4f5;
   --gain: #15803d;
   --loss: #b91c1c;
-}
-
-html.dark {
-  color-scheme: dark;
-  --background: #09090b;
-  --foreground: #fafafa;
-  --muted: #a1a1aa;
-  --faint: #71717a;
-  --border: #27272a;
-  --card: #18181b;
-  --input: #18181b;
-  --surface: #27272a;
-  --gain: #4ade80;
-  --loss: #fb7185;
 }
 
 @theme inline {
@@ -60,4 +61,15 @@ table {
   font-variant-numeric: tabular-nums;
 }
 
-/* Next.js “N” badge — also disabled via next.config devIndicators */
+:focus-visible {
+  outline: 2px solid var(--foreground);
+  outline-offset: 2px;
+}
+
+button:focus-visible,
+a:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--foreground);
+  outline-offset: 2px;
+}

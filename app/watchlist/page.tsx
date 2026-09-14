@@ -92,7 +92,10 @@ function WatchlistInner() {
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h1 className="text-xl font-medium">Watchlist</h1>
-          <p className="text-sm text-muted">Saved in this browser. Add names with Watch on Adds & cuts or a stock page.</p>
+          <p className="text-sm text-muted">
+            Names are saved in this browser only — no account. Add stocks with Watch on Adds & cuts or a
+            stock page.
+          </p>
         </div>
         {updating ? <UpdatingNote /> : null}
       </div>
@@ -112,7 +115,7 @@ function WatchlistInner() {
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="text-faint">
+            <thead className="text-muted">
               <tr>
                 <th className="py-2 pr-3 font-normal">Stock</th>
                 <th className="hidden py-2 pr-3 font-normal sm:table-cell">Sector</th>
@@ -125,7 +128,10 @@ function WatchlistInner() {
               {rows.map((r) => (
                 <tr key={r.stock_id} className="border-t border-border">
                   <td className="py-2 pr-3">
-                    <Link className="hover:underline" href={`/stocks/${r.stock_id}?month=${month}`}>
+                    <Link
+                      className="hover:underline"
+                      href={month ? `/stocks/${r.stock_id}?month=${month}` : `/stocks/${r.stock_id}`}
+                    >
                       {r.display_name}
                     </Link>
                   </td>

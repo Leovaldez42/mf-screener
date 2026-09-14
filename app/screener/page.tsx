@@ -43,6 +43,12 @@ function columnsForClass(tab: ClassTabId): TableCol[] {
   return classShowsPe(tab) ? EQUITY_COLUMNS : TER_COLUMNS;
 }
 
+const METRIC_TIPS: Partial<Record<SortKey, string>> = {
+  sharpe_3y: "3-year Sharpe: return per unit of volatility. Higher is better.",
+  expense_ratio: "Total expense ratio. Lower means the scheme keeps more of the return.",
+  pe: "Portfolio price-to-earnings. Blank where it does not apply (debt, many hybrids).",
+};
+
 type NumericCol = "sharpe_3y" | "pe" | "expense_ratio" | "cagr_1y" | "cagr_3y" | "cagr_inception" | "aum_cr";
 
 export default function ScreenerPage() {
@@ -204,10 +210,10 @@ export default function ScreenerPage() {
                 type="button"
                 role="tab"
                 aria-selected={selected}
-                className={`shrink-0 border-b-2 px-3 py-2 text-sm ${
+                className={`shrink-0 rounded-md px-3 py-1.5 text-sm ${
                   selected
-                    ? "border-foreground text-foreground"
-                    : "border-transparent text-muted hover:text-foreground"
+                    ? "bg-surface text-foreground"
+                    : "text-muted hover:text-foreground"
                 }`}
                 onClick={() => changeClass(c.id)}
               >
@@ -313,7 +319,7 @@ export default function ScreenerPage() {
           </div>
           {!searching && universe != null ? (
             <p className="text-xs text-faint">
-              {schemes.length} of {universe}
+              {schemes.length} of {Math.max(universe, schemes.length)}
               {browseAll ? "" : ` ${classLabel.toLowerCase()}`} schemes
             </p>
           ) : null}
@@ -355,7 +361,7 @@ export default function ScreenerPage() {
       {schemes.length > 0 ? (
         <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
           <table className="w-full text-sm">
-            <thead className="text-faint">
+            <thead className="text-muted">
               <tr>
                 {tableColumns.map((column) => {
                   const isActive = sortKey === column.key;
@@ -364,12 +370,13 @@ export default function ScreenerPage() {
                   return (
                     <th
                       key={column.key}
-                      className={`py-2 pr-3 font-normal ${column.hide} ${
-                        isName ? "sticky left-0 z-10 bg-background text-left" : "text-center"
+                      className={`sticky top-0 z-20 bg-background py-2 pr-3 font-normal ${column.hide} ${
+                        isName ? "sticky left-0 z-30 bg-background text-left" : "text-center"
                       }`}
                     >
                       <button
                         type="button"
+                        title={METRIC_TIPS[column.key]}
                         className={`inline-flex items-center gap-1 hover:text-foreground ${isName ? "" : "justify-center"}`}
                         onClick={() => onSort(column.key)}
                       >
@@ -504,7 +511,7 @@ function StyleFilters({
                 type="button"
                 aria-pressed={on}
                 className={`block w-full rounded px-2 py-1.5 text-left text-sm ${
-                  on ? "bg-foreground text-background" : "text-muted hover:text-foreground"
+                  on ? "bg-surface text-foreground" : "text-muted hover:text-foreground"
                 }`}
                 onClick={() => toggle(s.id)}
               >
@@ -544,7 +551,7 @@ function Chip({
       type="button"
       onClick={onClick}
       className={`rounded-full border px-2.5 py-1 text-xs ${
-        on ? "border-foreground bg-foreground text-background" : "border-border text-muted hover:text-foreground"
+        on ? "border-foreground bg-surface text-foreground" : "border-border text-muted hover:text-foreground"
       }`}
     >
       {children}
@@ -566,13 +573,13 @@ function NumField({
   numeric?: boolean;
 }) {
   return (
-    <label className={`text-xs text-faint ${className}`}>
+    <label className={`text-xs text-muted ${className}`}>
       {label}
       <input
         className="mt-1 w-full rounded border border-border bg-input px-2 py-1.5 text-sm text-foreground placeholder:text-faint"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Any"
+        placeholder="All"
         inputMode={numeric ? "numeric" : "decimal"}
       />
     </label>

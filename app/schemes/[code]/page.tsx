@@ -26,7 +26,7 @@ export default function SchemePage() {
       .catch(() => setError("Not found"));
   }, [code]);
 
-  if (error) return <p className="text-sm text-amber-400">{error}</p>;
+  if (error) return <p className="text-sm text-loss">{error}</p>;
   if (!scheme) return <p className="text-sm text-faint">Loading…</p>;
 
   const assetClass = parseAssetClass(scheme.asset_class);
