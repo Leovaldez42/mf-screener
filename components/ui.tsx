@@ -5,16 +5,30 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useLayoutEffect, useState } from "react";
 import { LoadError } from "@/components/load-ui";
 import { ThemeToggle } from "@/components/theme";
-import { formatMonthLabel } from "@/lib/format";
-import { loadMonths, peekMonths } from "@/lib/load-months";
+import { formatMonthLabel, formatMonthShort } from "@/lib/format";
+import { loadMonths, peekCoverage, peekMonths } from "@/lib/load-months";
 import { prefetchHomeData } from "@/lib/prefetch-home";
 
 function MonthSelectFallback() {
   return (
-    <div className="flex h-8 w-full items-center gap-2 text-sm md:ml-auto md:w-auto">
-      <span className="text-faint">Holdings as of</span>
+    <div className="flex h-8 w-full items-center gap-2 text-sm">
+      <span className="text-muted">Holdings as of</span>
       <span className="inline-block h-8 min-w-44 flex-1 animate-pulse rounded border border-border bg-surface md:flex-none" />
     </div>
+  );
+}
+
+function CoverageChip({ month, latest }: { month: string; latest: string }) {
+  if (!month || !latest || month !== latest) return null;
+  const cov = peekCoverage()[latest];
+  if (!cov || cov.pct >= 100 || cov.total <= 0) return null;
+  return (
+    <span
+      className="shrink-0 rounded-md border border-border bg-surface px-2 py-0.5 text-xs text-muted"
+      title={`${cov.have} of ${cov.total} AMCs in this book`}
+    >
+      {formatMonthShort(month)} · {cov.pct}%
+    </span>
   );
 }
 
@@ -53,9 +67,23 @@ function MonthSelect() {
       } else {
         setStatus("loading");
       }
-      refresh();
+      if (!peekMonths().length) setStatus("loading");
+      loadMonths()
+        .then((next) => {
+          setMonths(next);
+          setStatus("ready");
+        })
+        .catch(() => {
+          const cachedMonths = peekMonths();
+          if (cachedMonths.length) {
+            setMonths(cachedMonths);
+            setStatus("ready");
+          } else {
+            setStatus("error");
+          }
+        });
     });
-  }, []);
+  }, [month]);
 
   function setMonth(next: string) {
     if (pathname.startsWith("/month/")) {
@@ -75,16 +103,16 @@ function MonthSelect() {
 
   if (status === "error" && months.length === 0) {
     return (
-      <div className="flex h-8 w-full items-center gap-2 text-sm md:ml-auto md:w-auto">
-        <span className="text-faint">Holdings as of</span>
+      <div className="flex h-8 w-full items-center gap-2 text-sm">
+        <span className="text-muted">Holdings as of</span>
         <LoadError message="Could not load months" onRetry={refresh} />
       </div>
     );
   }
 
   return (
-    <div className="flex h-8 w-full items-center gap-2 text-sm md:ml-auto md:w-auto">
-      <span className="text-faint">Holdings as of</span>
+    <div className="flex h-8 w-full flex-wrap items-center gap-2 text-sm">
+      <span className="text-muted">Holdings as of</span>
       <select
         className="h-8 min-w-0 flex-1 rounded border border-border bg-input px-2 py-1 md:flex-none"
         value={month}
@@ -97,7 +125,112 @@ function MonthSelect() {
           </option>
         ))}
       </select>
+      <CoverageChip month={month} latest={months[0] || ""} />
     </div>
+  );
+}
+
+const NAV_GROUPS = [
+  {
+    label: "Research",
+    items: [
+      { href: "/adds-cuts", label: "Adds & cuts" },
+      { href: "/sectors", label: "Sectors" },
+    ],
+  },
+  {
+    label: "Funds",
+    items: [
+      { href: "/screener", label: "Screener" },
+      { href: "/compare", label: "Compare" },
+    ],
+  },
+  {
+    label: "You",
+    items: [
+      { href: "/watchlist", label: "Watchlist" },
+      { href: "/portfolio", label: "Portfolio", soon: true },
+    ],
+  },
+];
+
+function isResearchPath(pathname: string) {
+  return (
+    pathname === "/adds-cuts" ||
+    pathname === "/sectors" ||
+    pathname === "/watchlist" ||
+    pathname.startsWith("/stocks/") ||
+    pathname.startsWith("/funds/") ||
+    pathname.startsWith("/month/")
+  );
+}
+
+function isWidePath(pathname: string) {
+  return (
+    isResearchPath(pathname) ||
+    pathname === "/screener" ||
+    pathname === "/compare" ||
+    pathname.startsWith("/schemes/")
+  );
+}
+
+function BrandMark() {
+  return (
+    <svg viewBox="0 0 32 32" className="h-7 w-7 shrink-0" aria-hidden>
+      <rect width="32" height="32" rx="8" fill="#09090B" />
+      <path fill="#FFFFFF" d="M8 8.5h16v3.2h-6.2V24h-3.6V11.7H8V8.5z" />
+      <circle cx="25.2" cy="6.8" r="2.4" fill="#3B82F6" />
+    </svg>
+  );
+}
+
+function navClass(pathname: string, href: string, soon?: boolean) {
+  if (soon) return "whitespace-nowrap text-sm text-muted";
+  const on =
+    pathname === href ||
+    (href !== "/" && pathname.startsWith(href)) ||
+    (href === "/screener" && pathname.startsWith("/schemes"));
+  return on
+    ? "whitespace-nowrap text-sm font-medium text-foreground underline decoration-foreground/30 underline-offset-4"
+    : "whitespace-nowrap text-sm text-muted hover:text-foreground";
+}
+
+function NavGroups({ pathname, stacked }: { pathname: string; stacked?: boolean }) {
+  return (
+    <>
+      {NAV_GROUPS.map((group) => (
+        <div key={group.label} className={stacked ? "" : "shrink-0"}>
+          <div className="mb-1 text-[10px] font-medium uppercase tracking-[0.16em] text-faint">
+            {group.label}
+          </div>
+          <div className={stacked ? "flex flex-col gap-2" : "flex items-center gap-3"}>
+            {group.items.map((item) =>
+              item.soon ? (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`${navClass(pathname, item.href, true)} inline-flex items-center gap-1.5`}
+                  title="Coming soon"
+                >
+                  {item.label}
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-faint">soon</span>
+                </Link>
+              ) : (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={navClass(pathname, item.href)}
+                  onMouseEnter={item.href === "/adds-cuts" ? () => prefetchHomeData() : undefined}
+                  onFocus={item.href === "/adds-cuts" ? () => prefetchHomeData() : undefined}
+                >
+                  {item.label}
+                </Link>
+              ),
+            )}
+          </div>
+        </div>
+      ))}
+    </>
   );
 }
 
@@ -110,81 +243,75 @@ export function Shell({ children }: { children: React.ReactNode }) {
     setMenuOpen(false);
   }
 
-  const nav = [
-    { href: "/adds-cuts", label: "Adds & cuts" },
-    { href: "/screener", label: "Screener" },
-    { href: "/compare", label: "Compare" },
-    { href: "/sectors", label: "Sectors" },
-    { href: "/watchlist", label: "Watchlist" },
-    { href: "/about", label: "About" },
-  ];
-  const showMonth =
-    pathname === "/adds-cuts" ||
-    pathname.startsWith("/stocks/") ||
-    pathname.startsWith("/funds/") ||
-    pathname.startsWith("/month/") ||
-    pathname === "/sectors" ||
-    pathname === "/watchlist";
-
-  function navClass(href: string) {
-    const active =
-      pathname === href ||
-      (href !== "/" && pathname.startsWith(href)) ||
-      (href === "/screener" && pathname.startsWith("/schemes"));
-    return active ? "text-foreground" : "text-muted hover:text-foreground";
-  }
+  const showMonth = isResearchPath(pathname);
+  const home = pathname === "/";
+  const wide = isWidePath(pathname);
+  const mainWidth = home ? "max-w-5xl" : wide ? "max-w-6xl" : "max-w-3xl";
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <header className="border-b border-border bg-card">
-        <div className="mx-auto flex w-full max-w-screen-2xl flex-wrap items-center gap-3 px-4 py-3 lg:px-6">
-          <Link href="/" className="font-medium tracking-tight">
-            MF Chase
+      <header className="z-40 border-b border-border bg-card">
+        <div className="flex w-full flex-nowrap items-center gap-6 px-4 py-3 lg:px-6">
+          <Link href="/" className="flex shrink-0 items-center gap-2 font-medium tracking-tight">
+            <BrandMark />
+            Thinkbrew
           </Link>
-          <div className="ml-auto flex items-center gap-3 md:order-last">
+          <nav className="hidden min-w-0 flex-1 items-end gap-8 overflow-hidden md:flex md:flex-nowrap lg:gap-10" aria-label="Primary">
+            <NavGroups pathname={pathname} />
+          </nav>
+          <div className="ml-auto flex shrink-0 items-center gap-3">
             <a
               href="https://github.com/Leovaldez42/mf-screener"
-              className="text-sm text-muted hover:text-foreground"
+              className="group hidden items-center gap-1.5 text-sm sm:inline-flex"
               target="_blank"
               rel="noopener noreferrer"
             >
-              Open source <span className="text-rose-500" aria-hidden>♥</span>
+              <span className="text-rose-500" aria-hidden>
+                ♥
+              </span>
+              <span className="text-muted group-hover:text-foreground">Open source</span>
             </a>
             <ThemeToggle />
             <button
               type="button"
-              className="rounded border border-border px-2 py-1 text-xs text-muted md:hidden"
+              className="rounded-md border border-border px-2 py-1 text-xs text-muted md:hidden"
               onClick={() => setMenuOpen((v) => !v)}
               aria-expanded={menuOpen}
+              aria-label={menuOpen ? "Close menu" : "Open menu"}
             >
               {menuOpen ? "Close" : "Menu"}
             </button>
           </div>
-          <nav
-            className={`${menuOpen ? "flex" : "hidden"} w-full flex-col gap-2 text-sm md:ml-0 md:flex md:w-auto md:flex-row md:flex-wrap md:gap-3`}
-          >
-            {nav.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={navClass(item.href)}
-                onMouseEnter={item.href === "/adds-cuts" ? () => prefetchHomeData() : undefined}
-                onFocus={item.href === "/adds-cuts" ? () => prefetchHomeData() : undefined}
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-          {showMonth ? (
-            <Suspense fallback={<MonthSelectFallback />}>
-              <MonthSelect />
-            </Suspense>
-          ) : (
-            <div className="hidden h-8 md:ml-auto md:block" />
-          )}
         </div>
+        {menuOpen ? (
+          <div className="border-t border-border px-4 py-4 md:hidden">
+            <nav className="flex flex-col gap-5 text-sm" aria-label="Mobile">
+              <NavGroups pathname={pathname} stacked />
+              <a
+                href="https://github.com/Leovaldez42/mf-screener"
+                className="group inline-flex items-center gap-1.5 text-sm"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <span className="text-rose-500" aria-hidden>
+                  ♥
+                </span>
+                <span className="text-muted group-hover:text-foreground">Open source</span>
+              </a>
+            </nav>
+          </div>
+        ) : null}
+        {showMonth ? (
+          <div className="border-t border-border bg-card">
+            <div className="w-full px-4 py-2 lg:px-6">
+              <Suspense fallback={<MonthSelectFallback />}>
+                <MonthSelect />
+              </Suspense>
+            </div>
+          </div>
+        ) : null}
       </header>
-      <main className="mx-auto w-full max-w-screen-2xl flex-1 px-4 py-6 lg:px-6">{children}</main>
+      <main className={`mx-auto w-full ${mainWidth} flex-1 px-4 py-6 lg:px-6`}>{children}</main>
     </div>
   );
 }

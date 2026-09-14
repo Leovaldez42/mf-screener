@@ -52,8 +52,8 @@ function parseNum(v: unknown): number {
 
 function lastCompletedYyyyMm(): string {
   const d = new Date();
-  // AMC books land ~10 working days after month-end. Before the 15th, last month is still incomplete.
-  const shift = d.getDate() < 15 ? 2 : 1;
+  // AMC books land ~10 working days after month-end. Before the 14th, last month is still incomplete.
+  const shift = d.getDate() < 14 ? 2 : 1;
   d.setDate(1);
   d.setMonth(d.getMonth() - shift);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;

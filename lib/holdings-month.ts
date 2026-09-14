@@ -11,10 +11,13 @@ export function previousMonth(month: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-/** Last month whose AMC books are expected to be in. Before the 15th, prior month is still incomplete. */
+/** Calendar day of the following month when last month’s books are treated as current. */
+const BOOKS_READY_DAY = 14;
+
+/** Last month whose AMC books are expected to be in. Before the 14th, prior month is still incomplete. */
 export function lastCompletedYyyyMm(now = new Date()): string {
   const d = new Date(now);
-  const shift = d.getDate() < 15 ? 2 : 1;
+  const shift = d.getDate() < BOOKS_READY_DAY ? 2 : 1;
   d.setDate(1);
   d.setMonth(d.getMonth() - shift);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -46,7 +49,7 @@ async function queryCompleteMonths(): Promise<string[]> {
   return counts.filter((row) => row.count > 0).map((row) => row.month);
 }
 
-const cachedCompleteMonths = unstable_cache(queryCompleteMonths, ["complete-months"], {
+const cachedCompleteMonths = unstable_cache(queryCompleteMonths, ["complete-months", "ready-14"], {
   revalidate: HOLDINGS_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS],
 });

@@ -16,12 +16,18 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.thinkbrew.in"),
-  title: "MF Chase",
+  title: {
+    default: "Thinkbrew",
+    template: "%s · Thinkbrew",
+  },
   description:
     "See what Indian active-equity mutual funds bought and sold last month. Adds and cuts, fund screener, and compare. Not investment advice.",
   icons: {
     icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
     apple: [{ url: "/apple-icon.png" }],
+  },
+  openGraph: {
+    siteName: "Thinkbrew",
   },
 };
 
@@ -31,10 +37,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className="dark" suppressHydrationWarning>
       <body className={`${geistSans.variable} font-sans antialiased bg-background text-foreground`}>
         <Script id="mf-chase-theme" strategy="beforeInteractive">
-          {`(function(){try{var t=localStorage.getItem("mf-chase-theme");var dark=t==="dark"||(t!=="light"&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(dark)document.documentElement.classList.add("dark");else document.documentElement.classList.remove("dark");}catch(e){}})();`}
+          {`(function(){try{var t=localStorage.getItem("mf-chase-theme");var dark=t!=="light";if(dark)document.documentElement.classList.add("dark");else document.documentElement.classList.remove("dark");}catch(e){document.documentElement.classList.add("dark");}})();`}
         </Script>
         {process.env.NODE_ENV === "production" ? (
           <Script

@@ -70,6 +70,38 @@ export const getSectorRows = unstable_cache(loadSectorRows, ["sector-rows"], {
   tags: [CACHE_TAG_HOLDINGS],
 });
 
+export type HoldingsCoverage = {
+  month: string;
+  have: number;
+  total: number;
+  pct: number;
+};
+
+async function loadHoldingsCoverage(month: string): Promise<HoldingsCoverage> {
+  const db = createAnonClient();
+  const families = await fetchAllRows<{ id: number; amc_slug: string | null }>(() =>
+    db.from("families").select("id, amc_slug"),
+  );
+  const snaps = await fetchAllRows<{ family_id: number }>(() =>
+    db.from("holdings_snapshots").select("family_id").eq("month", month),
+  );
+  const haveFamilies = new Set(snaps.map((s) => s.family_id));
+  const amcOf = (slug: string | null) => (slug || "").trim().toLowerCase();
+  const totalAmcs = new Set(families.map((f) => amcOf(f.amc_slug)).filter(Boolean));
+  const haveAmcs = new Set(
+    families.filter((f) => haveFamilies.has(f.id)).map((f) => amcOf(f.amc_slug)).filter(Boolean),
+  );
+  const total = totalAmcs.size || families.length;
+  const have = haveAmcs.size;
+  const pct = total > 0 ? Math.round((have / total) * 100) : 100;
+  return { month, have, total, pct };
+}
+
+export const getHoldingsCoverage = unstable_cache(loadHoldingsCoverage, ["holdings-coverage"], {
+  revalidate: HOLDINGS_REVALIDATE_SEC,
+  tags: [CACHE_TAG_HOLDINGS],
+});
+
 export async function resolveHoldingsMonth(requested: string | null): Promise<string | null> {
   const complete = await listCompleteMonths();
   if (requested && complete.includes(requested)) return requested;

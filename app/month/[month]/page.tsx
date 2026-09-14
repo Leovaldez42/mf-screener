@@ -30,7 +30,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       url,
       title,
       description,
-      siteName: "MF Chase",
+      siteName: "Thinkbrew",
       images: [{ url: image, width: 1200, height: 630, type: "image/png" }],
     },
     twitter: {

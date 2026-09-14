@@ -9,16 +9,20 @@ type SortKey = "display_name" | "sector" | "fund_count" | "net_qty_delta" | "net
 
 const COLUMNS: { key: SortKey; label: string; hide: string }[] = [
   { key: "display_name", label: "Stock", hide: "" },
-  { key: "sector", label: "Sector", hide: "hidden sm:block" },
-  { key: "fund_count", label: "Funds", hide: "" },
-  { key: "net_qty_delta", label: "Net qty", hide: "hidden md:block" },
   { key: "net_value_delta_cr", label: "Net ₹ cr", hide: "" },
+  { key: "fund_count", label: "Funds", hide: "" },
+  { key: "sector", label: "Sector", hide: "hidden sm:block" },
+  { key: "net_qty_delta", label: "Net qty", hide: "hidden md:block" },
   { key: "median_weight_pct", label: "Median wt %", hide: "hidden sm:block" },
 ];
 
 const ROW_H = 40;
 const ROW_GRID =
-  "grid h-10 grid-cols-[minmax(0,1fr)_3.25rem_minmax(0,1fr)_4.75rem] items-center gap-x-3 sm:grid-cols-[minmax(0,1.5fr)_minmax(0,7rem)_3.25rem_minmax(0,1fr)_4.5rem_4.75rem] md:grid-cols-[minmax(0,1.5fr)_minmax(0,7rem)_3.25rem_minmax(0,6.5rem)_minmax(0,1fr)_4.5rem_4.75rem]";
+  "grid h-10 grid-cols-[minmax(0,1.4fr)_4.75rem_3rem_3.6rem] items-center gap-x-3 sm:grid-cols-[minmax(0,1.6fr)_4.75rem_3rem_minmax(0,7rem)_4.5rem_3.6rem] md:grid-cols-[minmax(0,1.6fr)_5rem_3.25rem_minmax(0,7rem)_minmax(0,6.5rem)_4.5rem_3.6rem]";
+
+function stockHref(id: string, month: string) {
+  return month ? `/stocks/${id}?month=${month}` : `/stocks/${id}`;
+}
 
 export function ChaseTable({
   rows,
@@ -50,7 +54,6 @@ export function ChaseTable({
     return () => window.removeEventListener("resize", update);
   }, [rows.length]);
 
-  // TanStack Virtual cannot be memoized; this component is opted out via "use no memo".
   const virtualizer = useWindowVirtualizer({
     count: rows.length,
     estimateSize: () => ROW_H,
@@ -64,12 +67,16 @@ export function ChaseTable({
 
   return (
     <div ref={topRef} className="text-sm tabular-nums">
-      <div className={`${ROW_GRID} text-faint`}>
+      <div className={`${ROW_GRID} sticky top-0 z-20 border-b border-border bg-background py-1 text-muted`}>
         {COLUMNS.map((column) => {
           const isActive = sortKey === column.key;
           const arrow = isActive ? (sortOrder === "desc" ? "↓" : "↑") : "↕";
+          const stickyStock = column.key === "display_name";
           return (
-            <div key={column.key} className={column.hide}>
+            <div
+              key={column.key}
+              className={`${column.hide} ${stickyStock ? "sticky left-0 z-10 bg-background" : ""}`}
+            >
               <button
                 type="button"
                 className="inline-flex items-center gap-1 font-normal hover:text-foreground"
@@ -90,31 +97,33 @@ export function ChaseTable({
         return (
           <div
             key={r.stock_id}
-            className={`${ROW_GRID} border-t border-border ${on ? "bg-surface" : ""}`}
+            className={`${ROW_GRID} border-t border-border ${on ? "bg-surface" : "bg-background"}`}
           >
-            <div className="min-w-0">
+            <div className="sticky left-0 z-10 min-w-0 bg-inherit">
               <Link
                 className={`block truncate hover:underline ${on ? "font-medium" : ""}`}
-                href={`/stocks/${r.stock_id}?month=${month}`}
+                href={stockHref(r.stock_id, month)}
                 title={r.display_name}
               >
                 {r.display_name}
               </Link>
             </div>
-            <div className="hidden min-w-0 truncate text-muted sm:block">{sectorLabel(r.sector)}</div>
-            <div>{r.fund_count}</div>
-            <div className="hidden md:block">
-              <Delta value={r.net_qty_delta} />
-            </div>
             <div>
               <Delta value={r.net_value_delta_cr} />
+            </div>
+            <div>{r.fund_count}</div>
+            <div className="hidden min-w-0 truncate text-muted sm:block" title={sectorLabel(r.sector)}>
+              {sectorLabel(r.sector)}
+            </div>
+            <div className="hidden md:block">
+              <Delta value={r.net_qty_delta} />
             </div>
             <div className="hidden sm:block">{formatNumber(r.median_weight_pct)}</div>
             <div>
               <button
                 type="button"
                 aria-pressed={on}
-                className={`w-19 rounded border px-2 py-0.5 text-xs ${
+                className={`rounded-md border px-2 py-0.5 text-xs ${
                   on
                     ? "border-foreground bg-foreground text-background"
                     : "border-border text-muted hover:border-faint hover:text-foreground"

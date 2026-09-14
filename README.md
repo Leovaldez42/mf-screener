@@ -1,4 +1,4 @@
-# MF Chase
+# Thinkbrew
 
 Research tool for **Indian mutual funds**: monthly adds and cuts for active-equity books (by share count), plus a fund screener and compare across classes.
 

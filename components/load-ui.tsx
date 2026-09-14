@@ -5,7 +5,7 @@ export function Skeleton({ className = "" }: { className?: string }) {
 export function LoadError({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <div className="flex flex-wrap items-center gap-3 text-sm">
-      <p className="text-amber-400">{message}</p>
+      <p className="text-loss">{message}</p>
       <button
         type="button"
         className="rounded border border-border px-2 py-0.5 text-xs text-muted hover:text-foreground"
@@ -45,7 +45,7 @@ export function TableSkeleton({
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left text-sm">
-        <thead className="text-faint">
+        <thead className="text-muted">
           <tr>
             {columns.map((column) => (
               <th key={column.label} className={`py-2 pr-3 font-normal ${column.hide ?? ""}`}>

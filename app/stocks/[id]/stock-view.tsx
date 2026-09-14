@@ -150,9 +150,9 @@ function StockPage() {
         </div>
         <div className="flex flex-wrap items-center justify-end gap-3">
           {updating ? <UpdatingNote /> : null}
-          <ShareBar title={data.stock?.display_name || "MF Chase"} text={shareText} url={shareUrl} />
+          <ShareBar title={data.stock?.display_name || "Thinkbrew"} text={shareText} url={shareUrl} />
           <button
-            className={`rounded border px-3 py-1 text-sm ${
+            className={`rounded-md border px-3 py-1 text-sm ${
               watch.includes(id)
                 ? "border-foreground bg-foreground text-background"
                 : "border-border text-muted hover:text-foreground"
@@ -171,7 +171,7 @@ function StockPage() {
         </p>
         <div className="flex flex-wrap gap-4 text-sm">
           {(data.history || []).map((h) => (
-            <div key={h.month} className="rounded border border-border px-3 py-2">
+            <div key={h.month} className="rounded-lg border border-border bg-card px-3 py-2">
               <div className="text-faint">{formatMonthLabel(h.month)}</div>
               <div>{h.fund_count} funds</div>
             </div>
@@ -179,10 +179,10 @@ function StockPage() {
         </div>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-180 text-left text-sm">
-          <thead className="text-faint">
+        <table className="w-full min-w-176 text-left text-sm tabular-nums">
+          <thead className="text-muted">
             <tr>
-              <th className="py-2 pr-3 font-normal">Fund</th>
+              <th className="sticky left-0 z-10 bg-background py-2 pr-3 font-normal">Fund</th>
               <th className="py-2 pr-3 font-normal">Category</th>
               <th className="py-2 pr-3 font-normal">Qty</th>
               <th className="py-2 pr-3 font-normal">Weight %</th>
@@ -193,8 +193,15 @@ function StockPage() {
           <tbody>
             {(data.holders || []).map((h) => (
               <tr key={h.family_id} className="border-t border-border">
-                <td className="py-2 pr-3">
-                  <Link className="hover:underline" href={`/funds/${h.family_id}?month=${month || data.month}`}>
+                <td className="sticky left-0 z-10 max-w-48 bg-background py-2 pr-3">
+                  <Link
+                    className="hover:underline"
+                    href={
+                      month || data.month
+                        ? `/funds/${h.family_id}?month=${month || data.month}`
+                        : `/funds/${h.family_id}`
+                    }
+                  >
                     {h.family_name}
                   </Link>
                 </td>

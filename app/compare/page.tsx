@@ -42,6 +42,7 @@ function CompareInner() {
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [fetchedHits, setFetchedHits] = useState<SchemeMetric[]>([]);
+  const [names, setNames] = useState<Record<string, string>>({});
   const schemes = codes.length < 2 ? [] : fetchedSchemes;
   const hits = q.trim().length < 2 ? [] : fetchedHits;
 
@@ -77,7 +78,8 @@ function CompareInner() {
     return () => clearTimeout(t);
   }, [q]);
 
-  function add(code: string) {
+  function add(code: string, name?: string) {
+    if (name) setNames((prev) => ({ ...prev, [code]: name }));
     setCodes((prev) => {
       if (prev.includes(code) || prev.length >= COMPARE_MAX) return prev;
       const next = [...prev, code];
@@ -123,7 +125,7 @@ function CompareInner() {
                 <button
                   type="button"
                   className="w-full px-3 py-2 text-left hover:bg-surface"
-                  onClick={() => add(h.scheme_code)}
+                  onClick={() => add(h.scheme_code, h.name)}
                 >
                   <div>{h.name}</div>
                   <div className="text-xs text-faint">
@@ -138,32 +140,20 @@ function CompareInner() {
 
       {codes.length > 0 ? (
         <div className="flex flex-wrap gap-2">
-          {schemes.map((s) => (
+          {codes.map((c) => (
             <button
-              key={s.scheme_code}
+              key={c}
               type="button"
-              className="rounded border border-border px-2 py-1 text-xs text-muted hover:border-faint"
-              onClick={() => remove(s.scheme_code)}
+              className="rounded-md border border-border bg-card px-2 py-1 text-xs text-muted hover:border-faint"
+              onClick={() => remove(c)}
             >
-              {s.name} ×
+              {schemes.find((s) => s.scheme_code === c)?.name || names[c] || "Fund"} ×
             </button>
           ))}
-          {codes
-            .filter((c) => !schemes.some((s) => s.scheme_code === c))
-            .map((c) => (
-              <button
-                key={c}
-                type="button"
-                className="rounded border border-border px-2 py-1 text-xs text-faint"
-                onClick={() => remove(c)}
-              >
-                {c} ×
-              </button>
-            ))}
         </div>
       ) : null}
 
-      {error ? <p className="text-sm text-amber-400">{error}</p> : null}
+      {error ? <p className="text-sm text-loss">{error}</p> : null}
       {codes.length < 2 && !error ? (
         <p className="text-sm text-faint">Add at least two funds above to see the table.</p>
       ) : null}
@@ -171,14 +161,14 @@ function CompareInner() {
         <>
           <div className="space-y-3 md:hidden">
             {schemes.map((s) => (
-              <div key={s.scheme_code} className="rounded border border-border p-3">
+              <div key={s.scheme_code} className="rounded-lg border border-border bg-card p-3">
                 <Link className="font-medium hover:underline" href={`/schemes/${s.scheme_code}`}>
                   {s.name}
                 </Link>
                 <dl className="mt-2 space-y-1 text-sm">
                   {METRIC_ROWS.map((row) => (
                     <div key={row.key} className="flex justify-between gap-3">
-                      <dt className="text-faint">{row.label}</dt>
+                      <dt className="text-muted">{row.label}</dt>
                       <dd>{cell(s, row.key, row.digits)}</dd>
                     </div>
                   ))}
@@ -188,9 +178,9 @@ function CompareInner() {
           </div>
           <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-left text-sm">
-              <thead className="text-faint">
+              <thead className="text-muted">
                 <tr>
-                  <th className="sticky left-0 z-0 w-40 bg-background py-2 pr-3 font-normal">Metric</th>
+                  <th className="sticky left-0 z-10 w-40 bg-background py-2 pr-3 font-normal">Metric</th>
                   {schemes.map((s) => (
                     <th key={s.scheme_code} className="py-2 pr-3 font-normal align-bottom">
                       <Link className="text-foreground hover:underline" href={`/schemes/${s.scheme_code}`}>
@@ -203,7 +193,7 @@ function CompareInner() {
               <tbody>
                 {METRIC_ROWS.map((row) => (
                   <tr key={row.key} className="border-t border-border">
-                    <td className="sticky left-0 z-0 bg-background py-2 pr-3 text-muted">{row.label}</td>
+                    <td className="sticky left-0 z-10 bg-background py-2 pr-3 text-muted">{row.label}</td>
                     {schemes.map((s) => (
                       <td key={s.scheme_code} className="py-2 pr-3">
                         {cell(s, row.key, row.digits)}
