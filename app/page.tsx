@@ -162,11 +162,11 @@ export default async function LandingPage() {
 
       <section>
         <div className="grid gap-3 sm:grid-cols-2">
-          <Desk letter="C" title="Chase">
-            <AddsCutsLink className="text-foreground underline">Adds & cuts</AddsCutsLink> — what
-            active-equity funds added or sold last month, by share count.
+          <Desk letter="B" title="Books">
+            <AddsCutsLink className="text-foreground underline">Adds & cuts</AddsCutsLink> — monthly
+            active-equity books: what funds added or sold, by share count, not weight.
           </Desk>
-          <Desk letter="S" title="Screen">
+          <Desk letter="R" title="Research">
             <Link className="text-foreground underline" href="/screener">
               Screener
             </Link>{" "}
@@ -174,24 +174,20 @@ export default async function LandingPage() {
             <Link className="text-foreground underline" href="/compare">
               Compare
             </Link>{" "}
-            Direct Growth schemes by class, Sharpe, TER, and CAGR.
+            Direct Growth schemes by class, Sharpe, TER, CAGR.
           </Desk>
-          <Desk letter="W" title="Who owns">
-            Spot crowded names — how many funds own a stock, and how that shifted.{" "}
+          <Desk letter="E" title="Exposure">
+            Same adds and cuts rolled up by industry — where funds piled in or pulled out.{" "}
             <Link className="text-foreground underline" href="/sectors">
               Sectors
             </Link>
             .
           </Desk>
-          <Desk letter="B" title="My book">
+          <Desk letter="W" title="Watchlist">
             <Link className="text-foreground underline" href="/watchlist">
               Watchlist
             </Link>{" "}
-            in this browser.{" "}
-            <Link className="text-foreground underline" href="/portfolio">
-              Portfolio
-            </Link>{" "}
-            soon.
+            — names saved in this browser.
           </Desk>
         </div>
       </section>
