@@ -28,7 +28,12 @@ export type MfdataHolding = {
   name?: string;
   stock_name?: string;
   isin?: string;
-  sector?: string;
+  sectorClassification?: {
+    broaderIndustry?: string | null;
+    industry?: string | null;
+    sector?: string | null;
+    broaderSector?: string | null;
+  };
   quantity?: number;
   market_value_cr?: number;
   weight_pct?: number;

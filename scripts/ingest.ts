@@ -1,6 +1,7 @@
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import { isActiveEquityCategory, normalizeNameKey, slugifyAmc } from "../lib/equity";
+import { sectorFromHolding } from "../lib/format";
 import { createServiceClient } from "../lib/supabase";
 import { notifyRevalidate } from "../lib/notify-revalidate";
 import type { HoldingEvent, MfdataFamily, MfdataHolding } from "../lib/types";
@@ -154,7 +155,7 @@ async function main() {
     async function upsertStock(h: MfdataHolding): Promise<string | null> {
       const display = (h.name || h.stock_name || "").trim();
       if (!display) return null;
-      const sector = h.sector?.trim() || "";
+      const sector = sectorFromHolding(h);
       const name_key = normalizeNameKey(display);
       const cacheKey = `${name_key}|${sector || ""}`;
       const cached = stockCache.get(cacheKey);

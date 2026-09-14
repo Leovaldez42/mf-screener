@@ -6,45 +6,46 @@ Not a broker. Not investment advice.
 
 ## Product
 
-- **`/`** — landing
-- **Adds & cuts** (`/adds-cuts`) — what active-equity funds bought more of or sold between monthly books. `/chase` redirects here.
-- **Screener / Compare** — Direct Growth plans by class (active equity, index / ETF, debt, hybrid, other); filter and compare by house, Sharpe, PE, TER, CAGR. Compare stays within one class.
-- **Sectors / Watchlist / About**
-- Holdings land about **ten working days after month-end**. Until then the table shows the last complete book. Adds and cuts are shares, not weight.
-- **No login.** Watchlist and compare selection stay in `localStorage`. The browser never calls FinAPI.
+- **`/`** — home
+- **Adds & cuts** (`/adds-cuts`) — what active-equity funds bought or sold between monthly books, by share count
+- **Screener** (`/screener`) and **Compare** (`/compare`) — Direct Growth plans by class
+- **Sectors** (`/sectors`)
+- **Watchlist** (`/watchlist`) — this browser only
+- **Portfolio** (`/portfolio`) — soon
+- **About** (`/about`)
 
-JSON for the UI (and anything else) is under `/api/v1`. Holdings rows are still `GET /api/v1/chase`.
+AMC books land about **ten working days after month-end**. Adds and cuts are **share quantity**, not portfolio weight.
+
+**No login.** Watchlist and compare selection stay in `localStorage`. The browser never calls FinAPI.
+
+JSON for the UI is under `/api/v1` (holdings rows: `GET /api/v1/chase`).
 
 ## Setup
 
-1. Create a [Supabase](https://supabase.com) project.
-2. Run the SQL files in the editor, in order:
-   - [`supabase/migrations/20260829000000_init.sql`](supabase/migrations/20260829000000_init.sql)
-   - [`supabase/migrations/20260829010000_scheme_metrics.sql`](supabase/migrations/20260829010000_scheme_metrics.sql)
-   - [`supabase/migrations/20260903000000_scheme_metrics_pe.sql`](supabase/migrations/20260903000000_scheme_metrics_pe.sql) (adds `pe`; existing projects only need this file)
-   - [`supabase/migrations/20260913000000_scheme_metrics_asset_class.sql`](supabase/migrations/20260913000000_scheme_metrics_asset_class.sql) (adds `asset_class`; existing projects only need this file)
-3. Copy [`.env.example`](.env.example) to `.env.local` and fill keys (including `FINAPI_API_KEY`).
-4. Install and run:
+Empty [Supabase](https://supabase.com) project. Run these SQL files in the editor, **in this order**:
+
+1. [`supabase/migrations/20260829000000_init.sql`](supabase/migrations/20260829000000_init.sql)
+2. [`supabase/migrations/20260829010000_scheme_metrics.sql`](supabase/migrations/20260829010000_scheme_metrics.sql)
+3. [`supabase/migrations/20260903000000_scheme_metrics_pe.sql`](supabase/migrations/20260903000000_scheme_metrics_pe.sql)
+4. [`supabase/migrations/20260913000000_scheme_metrics_asset_class.sql`](supabase/migrations/20260913000000_scheme_metrics_asset_class.sql)
+
+Copy [`.env.example`](.env.example) to `.env.local` and fill the keys (Supabase + `FINAPI_API_KEY`). Extra ingest knobs are documented there.
 
 ```bash
 npm install
-npm run ingest:metrics   # FinAPI → scheme_metrics (all Direct Growth classes)
-npm run ingest           # FinAPI → holdings for active-equity schemes only, 12 months
+npm run ingest:metrics   # schemes first
+npm run ingest           # then holdings
 npm run dev              # http://localhost:3000
 ```
 
-Metrics ingest upserts **all Direct Growth** schemes, plus listed ETFs (they have no Direct/Growth plan in AMFI). Holdings ingest is **active-equity only** (`is_active_equity`) with `INGEST_HOLDINGS_LIMIT=0` by default. Already-ingested funds are skipped unless `INGEST_HOLDINGS_SKIP_EXISTING=0`. Requires `ingest:metrics` first. The old mfdata worker is `npm run ingest:mfdata`.
-
-Months in the Holdings as of dropdown are whatever exists in Supabase snapshots/aggregates. If FinAPI has no older books, a retry will not invent them.
-
-Ingest status for operators is at `/data` (not in the nav).
+Metrics before holdings. First ingest takes a while.
 
 ## Deploy
 
-Same app on Vercel + hosted Supabase. Set the same env vars.
+Host the app on Vercel against the same Supabase project. Set the variables from `.env.example` in the Vercel project (at least the `NEXT_PUBLIC_SUPABASE_*` keys, `SUPABASE_SERVICE_ROLE_KEY`, and `FINAPI_API_KEY`).
 
 ## License
 
 [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/). See [LICENSE](LICENSE).
 
-Non-commercial use only. If you change and redistribute this project, you must keep it under the same license and share the source. This is not an OSI Open Source license, because commercial use is not allowed.
+Non-commercial use only. If you change and redistribute this project, keep it under the same license and share the source. This is not an OSI Open Source license, because commercial use is not allowed.
