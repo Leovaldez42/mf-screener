@@ -25,20 +25,56 @@ async function loadChaseRows(month: string): Promise<ChaseRow[]> {
       )
       .eq("month", month),
   );
-  return data.map((r) => {
-    const stock = asOne(r.stocks);
-    return {
-      stock_id: r.stock_id as string,
-      display_name: String(stock?.display_name ?? "Unknown"),
-      sector: (stock?.sector as string | null) ?? null,
-      fund_count: Number(r.fund_count),
-      fund_count_delta: Number(r.fund_count_delta),
-      net_qty_delta: Number(r.net_qty_delta),
-      net_value_delta_cr: Number(r.net_value_delta_cr),
-      median_weight_pct: r.median_weight_pct == null ? null : Number(r.median_weight_pct),
-    };
-  });
+  return data.map(aggToChaseRow);
 }
+
+function aggToChaseRow(r: AggRow): ChaseRow {
+  const stock = asOne(r.stocks);
+  return {
+    stock_id: r.stock_id as string,
+    display_name: String(stock?.display_name ?? "Unknown"),
+    sector: (stock?.sector as string | null) ?? null,
+    fund_count: Number(r.fund_count),
+    fund_count_delta: Number(r.fund_count_delta),
+    net_qty_delta: Number(r.net_qty_delta),
+    net_value_delta_cr: Number(r.net_value_delta_cr),
+    median_weight_pct: r.median_weight_pct == null ? null : Number(r.median_weight_pct),
+  };
+}
+
+const PREVIEW_SELECT =
+  "stock_id, fund_count, fund_count_delta, net_qty_delta, net_value_delta_cr, median_weight_pct, stocks(display_name, sector)";
+
+async function loadChasePreview(month: string): Promise<{ inflows: ChaseRow[]; outflows: ChaseRow[] }> {
+  const db = createAnonClient();
+  const [up, down] = await Promise.all([
+    db
+      .from("stock_month_aggregates")
+      .select(PREVIEW_SELECT)
+      .eq("month", month)
+      .gt("net_value_delta_cr", 0)
+      .order("net_value_delta_cr", { ascending: false })
+      .limit(3),
+    db
+      .from("stock_month_aggregates")
+      .select(PREVIEW_SELECT)
+      .eq("month", month)
+      .lt("net_value_delta_cr", 0)
+      .order("net_value_delta_cr", { ascending: true })
+      .limit(3),
+  ]);
+  if (up.error) throw new Error(up.error.message);
+  if (down.error) throw new Error(down.error.message);
+  return {
+    inflows: (up.data || []).map((r) => aggToChaseRow(r as AggRow)),
+    outflows: (down.data || []).map((r) => aggToChaseRow(r as AggRow)),
+  };
+}
+
+export const getChasePreview = unstable_cache(loadChasePreview, ["chase-preview"], {
+  revalidate: HOLDINGS_REVALIDATE_SEC,
+  tags: [CACHE_TAG_HOLDINGS],
+});
 
 export const getChaseRows = unstable_cache(loadChaseRows, ["chase-rows"], {
   revalidate: HOLDINGS_REVALIDATE_SEC,
