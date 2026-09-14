@@ -74,7 +74,7 @@ function FundPage() {
   if (data.error === "no_holdings" || data.error === "not_found") {
     return (
       <div className="space-y-2">
-        <p className="text-sm text-amber-700 dark:text-amber-400">
+        <p className="text-sm text-muted">
           Holdings for this scheme have not been ingested yet.
         </p>
         <p className="text-sm text-faint">
@@ -84,7 +84,7 @@ function FundPage() {
       </div>
     );
   }
-  if (data.error) return <p className="text-sm text-amber-700 dark:text-amber-400">{data.error}</p>;
+  if (data.error) return <p className="text-sm text-loss">{data.error}</p>;
 
   const holdings = data.holdings || [];
   const sorted = [...holdings].sort((a, b) => {
@@ -133,7 +133,7 @@ function FundPage() {
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-180 text-left text-sm">
-          <thead className="text-faint">
+          <thead className="text-muted">
             <tr>
               {COLUMNS.map((column) => {
                 const isActive = sortKey === column.key;

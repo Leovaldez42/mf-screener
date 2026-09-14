@@ -5,6 +5,13 @@ export function formatMonthLabel(month: string | null | undefined): string {
   return date.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
 }
 
+export function formatMonthShort(month: string | null | undefined): string {
+  if (!month || month.length < 7) return "—";
+  const [y, m] = month.split("-");
+  const date = new Date(Number(y), Number(m) - 1, 1);
+  return date.toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+}
+
 /** Newest-first YYYY-MM list → "Jan–Jul 2026" or "Dec 2025–Jul 2026". */
 export function formatMonthSpan(months: string[]): string {
   if (!months.length) return "the latest available month";
@@ -20,10 +27,22 @@ export function formatMonthSpan(months: string[]): string {
   return `${a} ${y1}–${b} ${y2}`;
 }
 
+const JUNK_SECTOR = /^(unknown|n\.?a\.?|n\/a|na|-|—|none|null|not available)$/i;
+
+export function isJunkSector(sector: string | null | undefined): boolean {
+  const s = (sector || "").trim();
+  return !s || JUNK_SECTOR.test(s);
+}
+
+export function normalizeSectorKey(sector: string | null | undefined): string {
+  return (sector || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 /** Empty / missing industry labels from the AMC book. Matches Sectors rollup. */
 export function sectorLabel(sector: string | null | undefined): string {
-  const s = (sector || "").trim();
-  return s || "Unknown";
+  const s = (sector || "").trim().replace(/\s+/g, " ");
+  if (!s || JUNK_SECTOR.test(s)) return "Unknown";
+  return s;
 }
 
 export function formatNumber(n: number | null | undefined, digits = 2): string {
@@ -32,6 +51,22 @@ export function formatNumber(n: number | null | undefined, digits = 2): string {
     maximumFractionDigits: digits,
     minimumFractionDigits: 0,
   });
+}
+
+/** Compact share count for home previews, e.g. +12.4M sh. */
+export function formatCompactShares(n: number | null | undefined): string {
+  if (n === null || n === undefined || Number.isNaN(n)) return "—";
+  const sign = n > 0 ? "+" : n < 0 ? "-" : "";
+  const abs = Math.abs(n);
+  const body =
+    abs >= 1_000_000_000
+      ? `${(abs / 1_000_000_000).toFixed(1).replace(/\.0$/, "")}B`
+      : abs >= 1_000_000
+        ? `${(abs / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`
+        : abs >= 1_000
+          ? `${(abs / 1_000).toFixed(1).replace(/\.0$/, "")}K`
+          : abs.toLocaleString("en-IN", { maximumFractionDigits: 0 });
+  return `${sign}${body} sh`;
 }
 
 export function formatDelta(n: number | null | undefined, digits = 2): string {

@@ -36,9 +36,9 @@ export default function DataPage() {
         <code>npm run ingest:metrics</code>. Holdings (active equity only): <code>npm run ingest</code>.
         The browser never calls FinAPI.
       </p>
-      {error ? <p className="text-sm text-amber-400">{error}</p> : null}
+      {error ? <p className="text-sm text-loss">{error}</p> : null}
       <table className="w-full text-left text-sm">
-        <thead className="text-faint">
+        <thead className="text-muted">
           <tr>
             <th className="py-2 pr-3 font-normal">Started</th>
             <th className="py-2 pr-3 font-normal">Status</th>

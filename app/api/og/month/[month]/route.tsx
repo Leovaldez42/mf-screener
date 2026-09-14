@@ -6,7 +6,11 @@ import { supabaseConfigured } from "@/lib/supabase";
 export const runtime = "nodejs";
 export const revalidate = 3600;
 
-export async function GET(_req: Request, { params }: { params: Promise<{ month: string }> }) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ month: string }> },
+) {
+  void request;
   if (!supabaseConfigured()) {
     return ogFallback("Data source is not configured");
   }

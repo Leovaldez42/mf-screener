@@ -59,7 +59,7 @@ function Brand({ month }: { month: string }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
       <div style={{ display: "flex", alignItems: "baseline" }}>
-        <div style={{ display: "flex", fontSize: 28, fontWeight: 600 }}>MF Chase</div>
+        <div style={{ display: "flex", fontSize: 28, fontWeight: 600 }}>Thinkbrew</div>
         <div style={{ display: "flex", color: FAINT, fontSize: 24, marginLeft: 16 }}>Active equity</div>
       </div>
       <div style={{ display: "flex", color: MUTED, fontSize: 26 }}>{formatMonthLabel(month)}</div>
@@ -190,7 +190,7 @@ export function ogFallback(message: string) {
           fontSize: 40,
         }}
       >
-        <div style={{ display: "flex" }}>MF Chase</div>
+        <div style={{ display: "flex" }}>Thinkbrew</div>
         <div style={{ display: "flex", color: MUTED, marginTop: 16 }}>{message}</div>
         <div style={{ display: "flex", color: FAINT, marginTop: 24, fontSize: 22 }}>
           {SITE_URL.replace("https://", "")}
