@@ -13,7 +13,8 @@
     "ingest:holdings:codes": "tsx scripts/ingest-holdings.ts",
     "ingest:metrics": "tsx scripts/ingest-metrics.ts",
     "ingest:mfdata": "tsx scripts/ingest.ts",
-    "probe:finapi": "tsx scripts/probe-finapi.ts"
+    "probe:finapi": "tsx scripts/probe-finapi.ts",
+    "refresh:sectors": "INGEST_HOLDINGS_SECTOR_REFRESH=1 INGEST_HOLDINGS_SKIP_EXISTING=0 tsx scripts/ingest-holdings.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",

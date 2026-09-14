@@ -27,22 +27,54 @@ export function formatMonthSpan(months: string[]): string {
   return `${a} ${y1}–${b} ${y2}`;
 }
 
-const JUNK_SECTOR = /^(unknown|n\.?a\.?|n\/a|na|-|—|none|null|not available)$/i;
+const JUNK_SECTOR =
+  /^(unknown|n\.?a\.?|n\/a|na|-|—|–|\.|none|null|nil|not available|not applicable)$/i;
+const JUNK_NUMERIC = /^[\d.,\s]+$/;
+
+export type SectorClassification = {
+  broaderIndustry?: string | null;
+  industry?: string | null;
+  sector?: string | null;
+  broaderSector?: string | null;
+};
 
 export function isJunkSector(sector: string | null | undefined): boolean {
   const s = (sector || "").trim();
-  return !s || JUNK_SECTOR.test(s);
+  if (!s) return true;
+  if (JUNK_SECTOR.test(s)) return true;
+  if (JUNK_NUMERIC.test(s)) return true;
+  return false;
+}
+
+/** Trim, collapse space, drop junk. Does not rewrite FinAPI classification spelling. */
+export function canonicalizeSector(raw: string): string {
+  const s = (raw || "").trim().replace(/\s+/g, " ");
+  if (!s || isJunkSector(s)) return "";
+  return s;
 }
 
 export function normalizeSectorKey(sector: string | null | undefined): string {
-  return (sector || "").trim().replace(/\s+/g, " ").toLowerCase();
+  return canonicalizeSector(sector || "").toLowerCase();
 }
 
-/** Empty / missing industry labels from the AMC book. Matches Sectors rollup. */
+/** Empty / missing industry labels. Matches Sectors rollup. */
 export function sectorLabel(sector: string | null | undefined): string {
-  const s = (sector || "").trim().replace(/\s+/g, " ");
-  if (!s || JUNK_SECTOR.test(s)) return "Unknown";
-  return s;
+  const s = canonicalizeSector(sector || "");
+  return s || "Unknown";
+}
+
+/**
+ * FinAPI mapped tree only. Never use deprecated top-level holdings `sector`.
+ * broaderIndustry → industry → sector → broaderSector.
+ */
+export function sectorFromHolding(h: { sectorClassification?: SectorClassification | null }): string {
+  const sc = h.sectorClassification;
+  if (!sc) return "";
+  for (const candidate of [sc.broaderIndustry, sc.industry, sc.sector, sc.broaderSector]) {
+    const n = canonicalizeSector(candidate || "");
+    if (n) return n;
+  }
+  return "";
 }
 
 export function formatNumber(n: number | null | undefined, digits = 2): string {
