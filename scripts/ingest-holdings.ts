@@ -1,6 +1,7 @@
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import { normalizeNameKey, slugifyAmc } from "../lib/equity";
+import { sectorFromHolding } from "../lib/format";
 import { createServiceClient, fetchAllRows } from "../lib/supabase";
 import { notifyRevalidate } from "../lib/notify-revalidate";
 import type { HoldingEvent } from "../lib/types";
@@ -34,6 +35,7 @@ const DELAY_MS = Number(process.env.INGEST_HOLDINGS_DELAY_MS || "250");
 const FETCH_TIMEOUT_MS = Number(process.env.INGEST_HOLDINGS_TIMEOUT_MS || "60000");
 const SKIP_EXISTING = process.env.INGEST_HOLDINGS_SKIP_EXISTING !== "0";
 const AGG_ONLY = process.env.INGEST_HOLDINGS_AGG_ONLY === "1";
+const SECTOR_REFRESH = process.env.INGEST_HOLDINGS_SECTOR_REFRESH === "1";
 const CODE_FILTER = (process.env.INGEST_HOLDINGS_CODES || "")
   .split(",")
   .map((s) => s.trim())
@@ -237,7 +239,12 @@ type StockRow = { id: string; name_key: string; sector: string };
 type HoldingRow = {
   name?: string;
   isin?: string;
-  sector?: string;
+  sectorClassification?: {
+    broaderIndustry?: string | null;
+    industry?: string | null;
+    sector?: string | null;
+    broaderSector?: string | null;
+  };
   quantity?: unknown;
   weightage?: unknown;
   marketValue?: unknown;
@@ -282,26 +289,42 @@ async function main() {
   let familiesOk = 0;
   let familiesFail = 0;
   const notes: string[] = [
-    `window=${toFinMonth(start)}..${toFinMonth(end)} ${CODE_FILTER.length ? `codes=${CODE_FILTER.join(",")}` : LIMIT > 0 ? `limit=${LIMIT}` : "all-schemes"} skip_existing=${SKIP_EXISTING}`,
+    `window=${toFinMonth(start)}..${toFinMonth(end)} ${CODE_FILTER.length ? `codes=${CODE_FILTER.join(",")}` : LIMIT > 0 ? `limit=${LIMIT}` : "all-schemes"} skip_existing=${SKIP_EXISTING} sector_refresh=${SECTOR_REFRESH}`,
   ];
 
   const stockCache = new Map<string, StockRow>();
 
+  async function rememberStock(row: StockRow, keys: string[]): Promise<string> {
+    for (const k of keys) stockCache.set(k, row);
+    return row.id;
+  }
+
+  async function alignSector(id: string, current: string, sector: string): Promise<string> {
+    if (current === sector) return sector;
+    const { error } = await db.from("stocks").update({ sector }).eq("id", id);
+    if (error) return current;
+    return sector;
+  }
+
   async function upsertStock(h: HoldingRow): Promise<string | null> {
     const display = (h.name || "").trim();
     if (!display) return null;
-    const sector = (h.sector || "").trim();
+    const sector = sectorFromHolding(h);
     const name_key = normalizeNameKey(display);
-    const cacheKey = `${name_key}|${sector}`;
-    const cached = stockCache.get(cacheKey);
-    if (cached) return cached.id;
-
     const isin = h.isin?.trim() || null;
+    const cacheKeys = [`${name_key}|${sector}`, ...(isin ? [`isin:${isin}`] : [])];
+    const cached = cacheKeys.map((k) => stockCache.get(k)).find(Boolean);
+    if (cached) {
+      const next = await alignSector(cached.id, cached.sector, sector);
+      cached.sector = next;
+      return rememberStock(cached, cacheKeys);
+    }
+
     if (isin) {
       const existing = await db.from("stocks").select("id,name_key,sector").eq("isin", isin).maybeSingle();
       if (existing.data) {
-        stockCache.set(cacheKey, existing.data as StockRow);
-        return existing.data.id as string;
+        const next = await alignSector(existing.data.id as string, String(existing.data.sector || ""), sector);
+        return rememberStock({ id: existing.data.id as string, name_key, sector: next }, cacheKeys);
       }
     }
 
@@ -312,8 +335,7 @@ async function main() {
       .eq("sector", sector)
       .maybeSingle();
     if (existingKey.data) {
-      stockCache.set(cacheKey, existingKey.data as StockRow);
-      return existingKey.data.id as string;
+      return rememberStock(existingKey.data as StockRow, cacheKeys);
     }
 
     const inserted = await db
@@ -329,13 +351,11 @@ async function main() {
         .eq("sector", sector)
         .maybeSingle();
       if (retry.data) {
-        stockCache.set(cacheKey, retry.data as StockRow);
-        return retry.data.id as string;
+        return rememberStock(retry.data as StockRow, cacheKeys);
       }
       throw inserted.error;
     }
-    stockCache.set(cacheKey, inserted.data as StockRow);
-    return inserted.data.id as string;
+    return rememberStock(inserted.data as StockRow, cacheKeys);
   }
 
   try {
@@ -402,7 +422,7 @@ async function main() {
       }
 
       try {
-        if (SKIP_EXISTING && !CODE_FILTER.length) {
+        if (SKIP_EXISTING && !CODE_FILTER.length && !SECTOR_REFRESH) {
           const { count } = await db
             .from("holdings_snapshots")
             .select("stock_id", { count: "exact", head: true })
@@ -486,13 +506,19 @@ async function main() {
           }
 
           const uniqueRows = collapseSnapshots(rowsToInsert);
-          if (uniqueRows.length) {
+          if (!SECTOR_REFRESH && uniqueRows.length) {
             const { error } = await db.from("holdings_snapshots").upsert(uniqueRows, {
               onConflict: "family_id,month,stock_id",
             });
             if (error) throw error;
           }
           snapshots[month] = map;
+        }
+
+        if (SECTOR_REFRESH) {
+          familiesOk += 1;
+          console.log(`sectors ${code} ${scheme.name} months=${byMonth.size}`);
+          continue;
         }
 
         const latestWithBooks = months.find((m) => (snapshots[m]?.size || 0) > 0) || null;
@@ -555,6 +581,7 @@ async function main() {
       await sleep(DELAY_MS);
     }
 
+    if (!SECTOR_REFRESH) {
     for (const month of months.slice(0, -1)) {
       const prev = previousMonth(month);
       const { count: snapCount, error: cErr } = await db
@@ -627,8 +654,9 @@ async function main() {
         }
       }
     }
+    }
 
-    const status = AGG_ONLY
+    const status = AGG_ONLY || SECTOR_REFRESH
       ? "ok"
       : familiesFail && familiesOk
         ? "partial"
