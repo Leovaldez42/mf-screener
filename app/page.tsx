@@ -119,13 +119,13 @@ export default async function LandingPage() {
         seed={preview ? [...preview.inflows, ...preview.outflows] : undefined}
       />
       <section>
-        <div className="flex items-start justify-between gap-4">
-          <h1 className="min-w-0 text-2xl font-medium tracking-tight sm:text-3xl md:whitespace-nowrap">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+          <h1 className="min-w-0 flex-1 text-2xl font-medium tracking-tight text-pretty sm:text-3xl">
             What funds bought and sold — by share count.
           </h1>
           {preview?.month ? (
             <span
-              className="mt-1 shrink-0 rounded-md border border-border bg-card px-2.5 py-1 text-xs text-muted"
+              className="w-fit shrink-0 rounded-md border border-border bg-card px-2.5 py-1 text-xs text-muted sm:mt-1.5"
               title={
                 preview.coverageHave != null && preview.coverageTotal != null
                   ? `${preview.coverageHave} of ${preview.coverageTotal} AMCs in this book`
