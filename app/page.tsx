@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { AddsCutsLink } from "@/components/adds-cuts-link";
 import { PrefetchHome } from "@/components/prefetch-home";
-import { getChaseRows, getHoldingsCoverage, resolveHoldingsMonth } from "@/lib/cached-holdings";
+import { getChasePreview, getHoldingsCoverage, resolveHoldingsMonth } from "@/lib/cached-holdings";
 import { formatMonthLabel, formatMonthShort, formatCompactShares } from "@/lib/format";
 import { supabaseConfigured } from "@/lib/supabase";
 import type { ChaseRow } from "@/lib/types";
@@ -32,26 +32,31 @@ async function loadPreview(): Promise<Preview | null> {
   try {
     const month = await resolveHoldingsMonth(null);
     if (!month) return null;
-    const [rows, coverage] = await Promise.all([getChaseRows(month), getHoldingsCoverage(month)]);
-    if (!rows.length) return null;
-    const inflows = [...rows]
-      .filter((r) => r.net_value_delta_cr > 0)
-      .sort((a, b) => b.net_value_delta_cr - a.net_value_delta_cr)
-      .slice(0, 3);
-    const outflows = [...rows]
-      .filter((r) => r.net_value_delta_cr < 0)
-      .sort((a, b) => a.net_value_delta_cr - b.net_value_delta_cr)
-      .slice(0, 3);
+    const { inflows, outflows } = await getChasePreview(month);
     if (!inflows.length && !outflows.length) return null;
+    let coveragePct: number | null = null;
+    let coverageHave: number | null = null;
+    let coverageTotal: number | null = null;
+    try {
+      const coverage = await getHoldingsCoverage(month);
+      if (coverage.total > 0) {
+        coveragePct = coverage.pct;
+        coverageHave = coverage.have;
+        coverageTotal = coverage.total;
+      }
+    } catch (err) {
+      console.error("homepage coverage failed", err);
+    }
     return {
       month,
       inflows,
       outflows,
-      coveragePct: coverage.total > 0 ? coverage.pct : null,
-      coverageHave: coverage.have,
-      coverageTotal: coverage.total,
+      coveragePct,
+      coverageHave,
+      coverageTotal,
     };
-  } catch {
+  } catch (err) {
+    console.error("homepage preview failed", err);
     return null;
   }
 }
