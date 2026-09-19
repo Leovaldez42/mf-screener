@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { Delta } from "@/components/ui";
+import { FundSectorMap } from "@/components/fund-sector-map";
 import { formatNumber, sectorLabel } from "@/lib/format";
 import { sessionCacheGet, sessionCacheSet } from "@/lib/session-cache";
 
@@ -120,17 +121,7 @@ function FundPage() {
           month-end.
         </p>
       ) : null}
-      <div className="space-y-2">
-        {(data.sectors || []).slice(0, 8).map((s) => (
-          <div key={s.name} className="flex items-center gap-3 text-sm">
-            <div className="w-40 truncate text-muted">{s.name}</div>
-            <div className="h-2 flex-1 rounded bg-surface">
-              <div className="h-2 rounded bg-muted" style={{ width: `${Math.min(100, s.weight_pct)}%` }} />
-            </div>
-            <div className="w-16 text-right">{formatNumber(s.weight_pct)}%</div>
-          </div>
-        ))}
-      </div>
+      <FundSectorMap sectors={data.sectors || []} />
       <div className="overflow-x-auto">
         <table className="w-full min-w-180 text-left text-sm">
           <thead className="text-muted">
