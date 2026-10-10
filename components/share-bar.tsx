@@ -31,15 +31,17 @@ export function ShareBar({ title, text }: { title: string; text: string; url: st
 
   const btn =
     "rounded border border-border px-3 py-1 text-sm text-muted hover:border-faint hover:text-foreground";
+  const primary =
+    "rounded border border-accent bg-accent px-3 py-1 text-sm text-accent-fg hover:opacity-90";
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       {native ? (
-        <button type="button" className={btn} onClick={() => void shareNative()}>
+        <button type="button" className={primary} onClick={() => void shareNative()}>
           Share
         </button>
       ) : null}
-      <button type="button" className={btn} onClick={() => void copy()}>
+      <button type="button" className={native ? btn : primary} onClick={() => void copy()}>
         {copied ? "Copied" : "Copy"}
       </button>
       <a className={btn} href={`https://wa.me/?text=${encoded}`} target="_blank" rel="noopener noreferrer">

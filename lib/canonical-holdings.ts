@@ -5,6 +5,7 @@ import {
   pickCleanestDisplayName,
   type MergeableChase,
 } from "@/lib/instruments";
+import { comparableFamilyIds } from "@/lib/mom-universe";
 import type { ChaseRow, HoldingEvent } from "@/lib/types";
 
 export type SnapshotLine = {
@@ -53,6 +54,7 @@ export type CanonicalBook = {
   deltas: CanonicalFundDelta[];
   currentFamilyIds: number[];
   priorFamilyIds: number[];
+  excludedNoPriorMonth: number;
 };
 
 function median(values: number[]): number | null {
@@ -151,6 +153,10 @@ export function computeCanonicalBook(
   const curMap = collapseByCanonical(current, aliasToCanonical);
   const prevMap = collapseByCanonical(prior, aliasToCanonical);
 
+  const currentFamilyIds = [...new Set(current.map((r) => r.family_id))];
+  const priorFamilyIds = [...new Set(prior.map((r) => r.family_id))];
+  const { included, excludedNoPriorMonth } = comparableFamilyIds(currentFamilyIds, priorFamilyIds);
+
   const keys = new Set([...curMap.keys(), ...prevMap.keys()]);
   const deltas: CanonicalFundDelta[] = [];
   const holdersThis = new Map<string, Set<number>>();
@@ -170,7 +176,12 @@ export function computeCanonicalBook(
     const prevValueCr = prev?.value ?? 0;
     const weight_pct = cur?.weight ?? 0;
     const prevWeightPct = prev?.weight ?? 0;
-    const event = classifyHoldingEvent(prevQty, qty);
+    const comparable = included.has(family_id);
+    const event = comparable ? classifyHoldingEvent(prevQty, qty) : "hold";
+    const qty_delta = comparable ? qty - prevQty : 0;
+    const momMove = comparable && event !== "hold";
+    const value_delta_cr = momMove ? value_cr - prevValueCr : 0;
+    const weight_delta = comparable ? weight_pct - prevWeightPct : 0;
     const meta = stocks[stock_id];
     deltas.push({
       family_id,
@@ -180,13 +191,13 @@ export function computeCanonicalBook(
       isin: meta?.isin ?? null,
       qty,
       prevQty,
-      qty_delta: qty - prevQty,
+      qty_delta,
       value_cr,
       prevValueCr,
-      value_delta_cr: value_cr - prevValueCr,
+      value_delta_cr,
       weight_pct,
       prevWeightPct,
-      weight_delta: weight_pct - prevWeightPct,
+      weight_delta,
       event,
     });
     if (qty > 0) {
@@ -202,31 +213,36 @@ export function computeCanonicalBook(
       set.add(family_id);
       holdersPrior.set(stock_id, set);
     }
-    netQty.set(stock_id, (netQty.get(stock_id) || 0) + (qty - prevQty));
-    netVal.set(stock_id, (netVal.get(stock_id) || 0) + (value_cr - prevValueCr));
+    if (momMove) {
+      netQty.set(stock_id, (netQty.get(stock_id) || 0) + qty_delta);
+      netVal.set(stock_id, (netVal.get(stock_id) || 0) + value_delta_cr);
+    }
   }
 
   const priorCount: Record<string, number> = {};
   const chase: ChaseRow[] = Object.values(stocks).map((meta) => {
-    const fund_count = holdersThis.get(meta.stock_id)?.size ?? 0;
-    const prior_count = holdersPrior.get(meta.stock_id)?.size ?? 0;
+    const holders = holdersThis.get(meta.stock_id) || new Set();
+    const priorHolders = holdersPrior.get(meta.stock_id) || new Set();
+    const fund_count = holders.size;
+    const prior_count = priorHolders.size;
     priorCount[meta.stock_id] = prior_count;
+    let comparableThis = 0;
+    let comparablePrior = 0;
+    for (const id of holders) if (included.has(id)) comparableThis += 1;
+    for (const id of priorHolders) if (included.has(id)) comparablePrior += 1;
     return {
       stock_id: meta.stock_id,
       display_name: meta.display_name,
       sector: meta.sector,
       fund_count,
-      fund_count_delta: fund_count - prior_count,
+      fund_count_delta: comparableThis - comparablePrior,
       net_qty_delta: netQty.get(meta.stock_id) || 0,
       net_value_delta_cr: netVal.get(meta.stock_id) || 0,
       median_weight_pct: median(weightsThis.get(meta.stock_id) || []),
     };
   });
 
-  assertMomInvariants(chase, priorCount, deltas);
-
-  const currentFamilyIds = [...new Set(current.map((r) => r.family_id))];
-  const priorFamilyIds = [...new Set(prior.map((r) => r.family_id))];
+  assertMomInvariants(chase, priorCount, deltas, included, holdersThis, holdersPrior);
 
   return {
     month,
@@ -237,6 +253,7 @@ export function computeCanonicalBook(
     deltas,
     currentFamilyIds,
     priorFamilyIds,
+    excludedNoPriorMonth,
   };
 }
 
@@ -244,14 +261,27 @@ export function assertMomInvariants(
   chase: ChaseRow[],
   priorCount: Record<string, number>,
   deltas: CanonicalFundDelta[],
+  included?: Set<number>,
+  holdersThis?: Map<string, Set<number>>,
+  holdersPrior?: Map<string, Set<number>>,
 ) {
   const errors: string[] = [];
   for (const row of chase) {
-    const prior = priorCount[row.stock_id] ?? 0;
-    const expected = row.fund_count - prior;
+    let expected: number;
+    if (included && holdersThis && holdersPrior) {
+      const cur = holdersThis.get(row.stock_id) || new Set();
+      const prev = holdersPrior.get(row.stock_id) || new Set();
+      let comparableThis = 0;
+      let comparablePrior = 0;
+      for (const id of cur) if (included.has(id)) comparableThis += 1;
+      for (const id of prev) if (included.has(id)) comparablePrior += 1;
+      expected = comparableThis - comparablePrior;
+    } else {
+      expected = row.fund_count - (priorCount[row.stock_id] ?? 0);
+    }
     if (row.fund_count_delta !== expected) {
       errors.push(
-        `${row.display_name}: fund_count_delta ${row.fund_count_delta} != ${row.fund_count} - ${prior}`,
+        `${row.display_name}: fund_count_delta ${row.fund_count_delta} != ${expected}`,
       );
     }
   }

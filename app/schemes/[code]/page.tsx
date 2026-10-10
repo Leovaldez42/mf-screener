@@ -1,33 +1,40 @@
-"use client";
-
+import type { Metadata } from "next";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { notFound } from "next/navigation";
+import { getSchemePage } from "@/lib/cached-metrics";
 import { classShowsPe, parseAssetClass } from "@/lib/fund-class";
-import { type CategoryAverage, type SchemeMetric } from "@/lib/scheme-metrics";
 import { formatDelta, formatNumber } from "@/lib/format";
+import { pageMetadata } from "@/lib/page-meta";
+import { type CategoryAverage, type SchemeMetric } from "@/lib/scheme-metrics";
+import { supabaseConfigured } from "@/lib/supabase";
 
-export default function SchemePage() {
-  const { code } = useParams<{ code: string }>();
-  const [scheme, setScheme] = useState<SchemeMetric | null>(null);
-  const [categoryAverage, setCategoryAverage] = useState<CategoryAverage | null>(null);
-  const [error, setError] = useState<string | null>(null);
+export const revalidate = 120;
 
-  useEffect(() => {
-    fetch(`/api/v1/schemes/${code}`)
-      .then(async (r) => {
-        const d = await r.json();
-        if (!r.ok) setError(d.error || "Not found");
-        else {
-          setScheme(d.scheme);
-          setCategoryAverage(d.categoryAverage || null);
-        }
-      })
-      .catch(() => setError("Not found"));
-  }, [code]);
+type Props = { params: Promise<{ code: string }> };
 
-  if (error) return <p className="text-sm text-loss">{error}</p>;
-  if (!scheme) return <p className="text-sm text-faint">Loading…</p>;
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { code } = await params;
+  if (!supabaseConfigured()) return { title: "Scheme" };
+  const payload = await getSchemePage(code);
+  if ("error" in payload && payload.error === "not_found") return { title: "Scheme not found" };
+  const scheme = payload.scheme;
+  const aum = scheme.aum_cr != null ? `AUM ₹${formatNumber(scheme.aum_cr, 0)} cr` : null;
+  return pageMetadata({
+    title: `${scheme.name} · Thinkbrew`,
+    description: `${scheme.fund_house} · ${scheme.category}${aum ? ` · ${aum}` : ""}. Direct Growth scheme metrics. Not investment advice.`,
+    path: `/schemes/${code}`,
+  });
+}
+
+export default async function SchemePage({ params }: Props) {
+  const { code } = await params;
+  if (!supabaseConfigured()) {
+    return <p className="text-sm text-muted">Scheme data is not configured.</p>;
+  }
+  const payload = await getSchemePage(code);
+  if ("error" in payload && payload.error === "not_found") notFound();
+  const scheme = payload.scheme;
+  const categoryAverage = payload.categoryAverage;
 
   const assetClass = parseAssetClass(scheme.asset_class);
   const stats: { label: string; key: keyof SchemeMetric; invert?: boolean; digits: number }[] = [

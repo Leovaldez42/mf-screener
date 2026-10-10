@@ -4,15 +4,18 @@ import { getMonthlyReport } from "@/lib/cached-report";
 import { formatMonthLabel } from "@/lib/format";
 import { listCompleteMonths } from "@/lib/holdings-month";
 import { reportListHeadline } from "@/lib/report-copy";
+import { pageMetadata } from "@/lib/page-meta";
 import { supabaseConfigured } from "@/lib/supabase";
 
+export const dynamic = "force-dynamic";
 export const revalidate = 300;
 
-export const metadata: Metadata = {
-  title: { absolute: "What fund managers bought · Thinkbrew" },
+export const metadata: Metadata = pageMetadata({
+  title: "What fund managers bought · Thinkbrew",
   description:
     "Monthly reports of what Indian active-equity mutual funds bought and sold. Not investment advice.",
-};
+  path: "/reports",
+});
 
 export default async function ReportsIndexPage() {
   if (!supabaseConfigured()) {

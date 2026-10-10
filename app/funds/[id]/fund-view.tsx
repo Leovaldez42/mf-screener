@@ -1,13 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { DataAsOfNote, Delta, UnavailableMonthNote } from "@/components/ui";
 import { FundSectorMap } from "@/components/fund-sector-map";
 import { formatMonthLabel, formatNumber } from "@/lib/format";
 import { instrumentSectorLabel, isCashLikeNonEquity, isEquityInstrument } from "@/lib/instruments";
-import { sessionCacheGet, sessionCacheSet } from "@/lib/session-cache";
 
 type Holding = {
   stock_id: string;
@@ -27,8 +26,9 @@ function holdingSectorLabel(h: Holding): string {
   return "Other instruments";
 }
 
-type Payload = {
+export type FundViewPayload = {
   family?: { name: string; sebi_category: string; amc_slug: string };
+  aum_cr?: number | null;
   month?: string | null;
   holdings?: Holding[];
   sectors?: { name: string; weight_pct: number }[];
@@ -56,45 +56,21 @@ function sortValue(row: Holding, key: SortKey): string | number {
   return row[key];
 }
 
-export function FundView() {
-  const { id } = useParams<{ id: string }>();
-  const search = useSearchParams();
+export function FundView({
+  initial,
+  fundId,
+  requestedMonth,
+}: {
+  initial: FundViewPayload;
+  fundId: string;
+  requestedMonth: string;
+}) {
   const router = useRouter();
-  const requested = search.get("month") || "";
-  const [data, setData] = useState<Payload | null>(null);
+  const data = initial;
+  const requested = requestedMonth;
   const [sortKey, setSortKey] = useState<SortKey>("weight_pct");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
-  useEffect(() => {
-    let cancelled = false;
-    const key = `fund:${id}:${requested || "_"}`;
-    const hit = sessionCacheGet<Payload>(key);
-    if (hit && hit.error !== "unknown_month") {
-      queueMicrotask(() => setData(hit));
-      return;
-    }
-    const q = requested ? `?month=${requested}` : "";
-    fetch(`/api/v1/funds/${id}${q}`)
-      .then(async (r) => {
-        const d = (await r.json()) as Payload;
-        if (cancelled) return;
-        if (d.error === "unknown_month") {
-          const latest = await fetch(`/api/v1/funds/${id}`);
-          const next = (await latest.json()) as Payload;
-          if (cancelled) return;
-          setData(next);
-          if (!next.error) sessionCacheSet(`fund:${id}:_`, next);
-          return;
-        }
-        setData(d);
-        if (!d.error) sessionCacheSet(key, d);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [id, requested]);
-
-  if (!data) return <p className="text-sm text-faint">Loading…</p>;
   if (data.error === "no_holdings" || data.error === "not_found") {
     return (
       <div className="space-y-2">
@@ -136,12 +112,13 @@ export function FundView() {
       <div>
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h1 className="text-xl font-medium">{data.family?.name}</h1>
-          <Link className="text-sm text-muted underline hover:text-foreground" href={`/overlap?funds=${id}`}>
+          <Link className="text-sm text-muted underline hover:text-foreground" href={`/overlap?funds=${fundId}`}>
             Check overlap
           </Link>
         </div>
         <p className="text-sm text-muted">
           {data.family?.amc_slug} · {data.family?.sebi_category}
+          {data.aum_cr != null ? ` · AUM ₹${formatNumber(data.aum_cr, 0)} cr` : ""}
           {data.month ? ` · Book as of ${data.month}` : ""}
         </p>
         {months.length ? (
@@ -153,11 +130,7 @@ export function FundView() {
                 value={data.month || ""}
                 onChange={(e) => {
                   const next = e.target.value;
-                  const params = new URLSearchParams(search.toString());
-                  if (next) params.set("month", next);
-                  else params.delete("month");
-                  const qs = params.toString();
-                  router.push(`${window.location.pathname}${qs ? `?${qs}` : ""}`);
+                  router.push(next ? `/funds/${fundId}?month=${next}` : `/funds/${fundId}`);
                 }}
               >
                 {months.map((m) => (

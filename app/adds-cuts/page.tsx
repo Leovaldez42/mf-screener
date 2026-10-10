@@ -5,8 +5,10 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { ChaseTable, type SortKey } from "@/components/chase-table";
 import { LoadError, SummaryCardSkeleton, TableSkeleton } from "@/components/load-ui";
+import { SectorPill } from "@/components/sector-pill";
 import { UnavailableMonthNote, loadWatchlist, saveWatchlist, useHoldingsMonths } from "@/components/ui";
 import { formatNumber, sectorLabel } from "@/lib/format";
+import { excludedNoPriorLabel } from "@/lib/mom-universe";
 import { pageHoldingsMonth } from "@/lib/holdings-month-pick";
 import { isEquityInstrument, NON_EQUITY_SECTORS } from "@/lib/instruments";
 import { loadMonths, peekCoverage } from "@/lib/load-months";
@@ -55,7 +57,7 @@ function ChaseFallback() {
           Active equity funds only. Adds and cuts use share quantity, not weight. Use{" "}
           <strong>Holdings as of</strong> in the header. Books lag month-end by about ten working
           days. Click a column header to sort. For the narrative cut, see{" "}
-          <Link href="/reports" className="underline hover:text-foreground">
+          <Link href="/reports" className="text-accent hover:underline">
             this month&apos;s report
           </Link>
           .
@@ -78,6 +80,11 @@ function ChasePage() {
   const waitingMonths = Boolean(requested && availableMonths.length === 0);
   const month = waitingMonths ? "" : pageHoldingsMonth(requested, availableMonths).month;
   const allRows = useCachedChase(month);
+  const excludedNoPrior = useSyncExternalStore(
+    sessionCacheSubscribe,
+    () => sessionCacheGet<number>(`chase-excluded:${month}`) ?? sessionCacheGet<number>("chase-excluded:") ?? 0,
+    () => 0,
+  );
   const [error, setError] = useState<string | null>(null);
   const [sector, setSector] = useState("");
   const [minFunds, setMinFunds] = useState("");
@@ -243,11 +250,14 @@ function ChasePage() {
           Active equity funds only. Adds and cuts use share quantity, not weight. Use{" "}
           <strong>Holdings as of</strong> in the header. Books lag month-end by about ten working
           days. Click a column header to sort. For the narrative cut, see{" "}
-          <Link href={month ? `/reports/${month}` : "/reports"} className="underline hover:text-foreground">
+          <Link href={month ? `/reports/${month}` : "/reports"} className="text-accent hover:underline">
             this month&apos;s report
           </Link>
           .
         </p>
+        {excludedNoPriorLabel(excludedNoPrior) ? (
+          <p className="mt-2 text-xs text-faint">{excludedNoPriorLabel(excludedNoPrior)}</p>
+        ) : null}
         <div className="mt-2">
           <UnavailableMonthNote requested={requested} showing={month} />
         </div>
@@ -274,7 +284,7 @@ function ChasePage() {
                 {summary.inflow ? summary.inflow.display_name : "—"}
                 {summary.inflow ? (
                   <span className="ml-2 font-normal text-gain">
-                    +{formatNumber(summary.inflow.net_value_delta_cr, 1)} ₹ cr
+                    ▲ +{formatNumber(summary.inflow.net_value_delta_cr, 1)} ₹ cr
                   </span>
                 ) : (
                   <span className="ml-2 font-normal text-muted">No positive movers</span>
@@ -288,7 +298,7 @@ function ChasePage() {
                 {summary.outflow ? summary.outflow.display_name : "—"}
                 {summary.outflow ? (
                   <span className="ml-2 font-normal text-loss">
-                    {formatNumber(summary.outflow.net_value_delta_cr, 1)} ₹ cr
+                    ▼ −{formatNumber(Math.abs(summary.outflow.net_value_delta_cr), 1)} ₹ cr
                   </span>
                 ) : (
                   <span className="ml-2 font-normal text-muted">No negative movers</span>
@@ -299,14 +309,16 @@ function ChasePage() {
             <div className="rounded-lg border border-border bg-card px-3 py-2">
               <div className="text-xs uppercase tracking-[0.12em] text-faint">Sector signal</div>
               <div className="mt-1 truncate text-sm font-medium text-foreground">
-                {summary.leadingSector ? summary.leadingSector.name : "—"}
                 {summary.leadingSector ? (
-                  <span className="ml-2 font-normal text-muted">
-                    {summary.leadingSector.value > 0 ? "Net inflow" : "Net outflow"}{" "}
-                    {formatNumber(Math.abs(summary.leadingSector.value), 1)} ₹ cr
-                  </span>
+                  <>
+                    <SectorPill sector={summary.leadingSector.name} />
+                    <span className="ml-2 font-normal text-muted">
+                      {summary.leadingSector.value > 0 ? "▲ Net inflow" : "▼ Net outflow"}{" "}
+                      {formatNumber(Math.abs(summary.leadingSector.value), 1)} ₹ cr
+                    </span>
+                  </>
                 ) : (
-                  <span className="ml-2 font-normal text-muted">No sector signal</span>
+                  <span className="font-normal text-muted">No sector signal</span>
                 )}
               </div>
             </div>

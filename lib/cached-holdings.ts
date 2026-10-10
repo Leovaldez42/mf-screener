@@ -2,7 +2,7 @@ import { unstable_cache } from "next/cache";
 import { computeCanonicalBook, type SnapshotLine } from "@/lib/canonical-holdings";
 import { listCompleteMonths, listFamilyMonths, previousMonth } from "@/lib/holdings-month";
 import { pickHoldingsMonth } from "@/lib/holdings-month-pick";
-import { CACHE_TAG_HOLDINGS, HOLDINGS_REVALIDATE_SEC } from "@/lib/http-cache";
+import { CACHE_TAG_HOLDINGS, CACHE_TAG_METRICS, HOLDINGS_REVALIDATE_SEC } from "@/lib/http-cache";
 import { asOne } from "@/lib/rel";
 import { createAnonClient, fetchAllRows } from "@/lib/supabase";
 import {
@@ -56,17 +56,30 @@ async function loadCanonicalBook(month: string) {
   return computeCanonicalBook(month, current, prior);
 }
 
-export const getCanonicalBook = unstable_cache(loadCanonicalBook, ["canonical-book-v1"], {
-  revalidate: HOLDINGS_REVALIDATE_SEC,
-  tags: [CACHE_TAG_HOLDINGS],
-});
+/** Full books are ~15MB; Next's data cache rejects items over 2MB. Coalesce in-flight loads only. */
+const inflightBooks = new Map<string, ReturnType<typeof loadCanonicalBook>>();
+
+export function getCanonicalBook(month: string) {
+  const hit = inflightBooks.get(month);
+  if (hit) return hit;
+  const pending = loadCanonicalBook(month).finally(() => {
+    inflightBooks.delete(month);
+  });
+  inflightBooks.set(month, pending);
+  return pending;
+}
 
 async function loadChaseRows(month: string): Promise<ChaseRow[]> {
   return (await getCanonicalBook(month)).chase;
 }
 
+export const getChaseRows = unstable_cache(loadChaseRows, ["chase-rows-equity-v7"], {
+  revalidate: HOLDINGS_REVALIDATE_SEC,
+  tags: [CACHE_TAG_HOLDINGS],
+});
+
 async function loadChasePreview(month: string): Promise<{ inflows: ChaseRow[]; outflows: ChaseRow[] }> {
-  const rows = await loadChaseRows(month);
+  const rows = await getChaseRows(month);
   const inflows = [...rows]
     .filter((r) => r.net_value_delta_cr > 0)
     .sort((a, b) => b.net_value_delta_cr - a.net_value_delta_cr)
@@ -78,12 +91,7 @@ async function loadChasePreview(month: string): Promise<{ inflows: ChaseRow[]; o
   return { inflows, outflows };
 }
 
-export const getChasePreview = unstable_cache(loadChasePreview, ["chase-preview", "equity-v5"], {
-  revalidate: HOLDINGS_REVALIDATE_SEC,
-  tags: [CACHE_TAG_HOLDINGS],
-});
-
-export const getChaseRows = unstable_cache(loadChaseRows, ["chase-rows-equity-v5"], {
+export const getChasePreview = unstable_cache(loadChasePreview, ["chase-preview", "equity-v7"], {
   revalidate: HOLDINGS_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS],
 });
@@ -98,12 +106,15 @@ async function loadSectorRows(month: string) {
     cur.net_qty_delta += d.qty_delta;
     map.set(key, cur);
   }
-  return [...map.entries()]
-    .map(([sector, v]) => ({ sector, ...v }))
-    .sort((a, b) => Math.abs(b.net_value_delta_cr) - Math.abs(a.net_value_delta_cr));
+  return {
+    excludedNoPriorMonth: book.excludedNoPriorMonth,
+    rows: [...map.entries()]
+      .map(([sector, v]) => ({ sector, ...v }))
+      .sort((a, b) => Math.abs(b.net_value_delta_cr) - Math.abs(a.net_value_delta_cr)),
+  };
 }
 
-export const getSectorRows = unstable_cache(loadSectorRows, ["sector-rows-equity-v5"], {
+export const getSectorRows = unstable_cache(loadSectorRows, ["sector-rows-equity-v7"], {
   revalidate: HOLDINGS_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS],
 });
@@ -219,6 +230,7 @@ async function loadStockPayload(id: string, requestedMonth: string) {
   const familyById = new Map((familyRows || []).map((f) => [f.id as number, f]));
 
   const holders = stockDeltas
+    .filter((d) => d.qty > 0 || d.event === "exit" || d.qty_delta !== 0)
     .map((d) => {
       const fam = familyById.get(d.family_id);
       return {
@@ -253,7 +265,7 @@ async function loadStockPayload(id: string, requestedMonth: string) {
   return { stock, month: monthToUse, history, holders, summary };
 }
 
-export const getStockPayload = unstable_cache(loadStockPayload, ["stock-payload-v5"], {
+export const getStockPayload = unstable_cache(loadStockPayload, ["stock-payload-v7"], {
   revalidate: HOLDINGS_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS],
 });
@@ -275,10 +287,28 @@ async function loadFundPayload(familyId: number, requestedMonth: string) {
   }
   const monthToUse = requestedMonth || availableMonths[0] || null;
   if (!monthToUse) {
-    return { family, month: null, holdings: [], sectors: [], availableMonths, error: null, empty: true };
+    const { data: metric } = await db
+      .from("scheme_metrics")
+      .select("aum_cr")
+      .eq("scheme_code", String(familyId))
+      .maybeSingle();
+    return {
+      family,
+      aum_cr: metric?.aum_cr == null ? null : Number(metric.aum_cr),
+      month: null,
+      holdings: [],
+      sectors: [],
+      availableMonths,
+      error: null,
+      empty: true,
+    };
   }
 
-  const book = await getCanonicalBook(monthToUse);
+  const [{ data: metric }, book] = await Promise.all([
+    db.from("scheme_metrics").select("aum_cr").eq("scheme_code", String(familyId)).maybeSingle(),
+    getCanonicalBook(monthToUse),
+  ]);
+  const aum_cr = metric?.aum_cr == null ? null : Number(metric.aum_cr);
   const holdings = book.deltas
     .filter((d) => d.family_id === familyId && d.qty > 0)
     .map((d) => ({
@@ -309,10 +339,10 @@ async function loadFundPayload(familyId: number, requestedMonth: string) {
     .map(([name, v]) => ({ name, weight_pct: v.weight, market_value_cr: v.value }))
     .sort((a, b) => b.weight_pct - a.weight_pct);
 
-  return { family, month: monthToUse, holdings, sectors, availableMonths };
+  return { family, aum_cr, month: monthToUse, holdings, sectors, availableMonths };
 }
 
-export const getFundPayload = unstable_cache(loadFundPayload, ["fund-payload-equity-v6"], {
+export const getFundPayload = unstable_cache(loadFundPayload, ["fund-payload-equity-v7"], {
   revalidate: HOLDINGS_REVALIDATE_SEC,
-  tags: [CACHE_TAG_HOLDINGS],
+  tags: [CACHE_TAG_HOLDINGS, CACHE_TAG_METRICS],
 });

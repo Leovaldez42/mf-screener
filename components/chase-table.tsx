@@ -1,6 +1,7 @@
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import Link from "next/link";
 import { useLayoutEffect, useRef, useState } from "react";
+import { SectorPill } from "@/components/sector-pill";
 import { Delta } from "@/components/ui";
 import { formatNumber, sectorLabel } from "@/lib/format";
 import type { ChaseRow } from "@/lib/types";
@@ -18,7 +19,7 @@ const COLUMNS: { key: SortKey; label: string; hide: string }[] = [
 
 const ROW_H = 40;
 const ROW_GRID =
-  "grid h-10 grid-cols-[minmax(0,1.4fr)_4.75rem_3rem_3.6rem] items-center gap-x-3 sm:grid-cols-[minmax(0,1.6fr)_4.75rem_3rem_minmax(0,7rem)_4.5rem_3.6rem] md:grid-cols-[minmax(0,1.6fr)_5rem_3.25rem_minmax(0,7rem)_minmax(0,6.5rem)_4.5rem_3.6rem]";
+  "grid h-10 grid-cols-[minmax(0,1.4fr)_8.5rem_3rem_3.6rem] items-center gap-x-3 sm:grid-cols-[minmax(0,1.6fr)_8.5rem_3rem_minmax(0,7rem)_4.5rem_3.6rem] md:grid-cols-[minmax(0,1.6fr)_8.75rem_3.25rem_minmax(0,7rem)_minmax(0,8rem)_4.5rem_3.6rem]";
 
 function stockHref(id: string, month: string) {
   return month ? `/stocks/${id}?month=${month}` : `/stocks/${id}`;
@@ -72,14 +73,15 @@ export function ChaseTable({
           const isActive = sortKey === column.key;
           const arrow = isActive ? (sortOrder === "desc" ? "↓" : "↑") : "↕";
           const stickyStock = column.key === "display_name";
+          const numeric = column.key === "net_value_delta_cr" || column.key === "net_qty_delta";
           return (
             <div
               key={column.key}
-              className={`${column.hide} ${stickyStock ? "sticky left-0 z-10 bg-background" : ""}`}
+              className={`${column.hide} ${stickyStock ? "sticky left-0 z-10 bg-background" : ""} ${numeric ? "text-right" : ""}`}
             >
               <button
                 type="button"
-                className="inline-flex items-center gap-1 font-normal hover:text-foreground"
+                className={`inline-flex items-center gap-1 font-normal hover:text-foreground ${numeric ? "justify-end" : ""}`}
                 onClick={() => onSort(column.key)}
               >
                 {column.label}
@@ -108,15 +110,15 @@ export function ChaseTable({
                 {r.display_name}
               </Link>
             </div>
-            <div>
-              <Delta value={r.net_value_delta_cr} />
+            <div className="text-right">
+              <Delta value={r.net_value_delta_cr} className="justify-end" />
             </div>
             <div>{r.fund_count}</div>
-            <div className="hidden min-w-0 truncate text-muted sm:block" title={sectorLabel(r.sector)}>
-              {sectorLabel(r.sector)}
+            <div className="hidden min-w-0 sm:block">
+              <SectorPill sector={sectorLabel(r.sector)} />
             </div>
-            <div className="hidden md:block">
-              <Delta value={r.net_qty_delta} />
+            <div className="hidden text-right md:block">
+              <Delta value={r.net_qty_delta} className="justify-end" />
             </div>
             <div className="hidden sm:block">{formatNumber(r.median_weight_pct)}</div>
             <div>
@@ -125,7 +127,7 @@ export function ChaseTable({
                 aria-pressed={on}
                 className={`rounded-md border px-2 py-0.5 text-xs ${
                   on
-                    ? "border-foreground bg-foreground text-background"
+                    ? "border-accent bg-accent text-accent-fg"
                     : "border-border text-muted hover:border-faint hover:text-foreground"
                 }`}
                 onClick={() => onToggleWatch(r.stock_id)}

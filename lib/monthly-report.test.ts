@@ -7,12 +7,14 @@ import {
   CONVICTION_MIN_FUNDS,
   CONVICTION_MIN_GROWTH,
   CONVICTION_MIN_HOUSES,
+  FULL_EXIT_MIN_FUNDS,
   reportMonthLookup,
   type MonthlyReportInput,
   type ReportDiffRow,
   type ReportFamily,
   type ReportHoldingRow,
 } from "./monthly-report";
+import { mostBoughtSentence } from "./report-copy";
 
 function family(id: number, amc: string, name?: string): ReportFamily {
   return { id, name: name || `Fund ${id}`, amc_slug: amc };
@@ -220,6 +222,69 @@ describe("buildMonthlyReport", () => {
       report.mostBought.some((r) => r.display_name === "HDFC Bank"),
       false,
     );
+  });
+
+  it("places a stock in only one money table, by the sign of net rupees", () => {
+    const report = buildMonthlyReport(
+      base({
+        diffs: [
+          diff(1, eternal, 50, 40, "add"),
+          diff(2, eternal, 40, 30, "add"),
+          diff(3, hdfc, 5, 2, "add"),
+          diff(4, hdfc, -80, -25, "cut"),
+          diff(5, hdfc, -70, -20, "cut"),
+          ...[6, 7, 8, 9, 10].map((id) => diff(id, hdfc, -10, -8, "cut")),
+        ],
+      }),
+    );
+    const went = new Set([
+      ...report.topNetBuys.map((r) => r.display_name),
+      ...report.moneyWentByFunds.map((r) => r.display_name),
+    ]);
+    const left = new Set([
+      ...report.topNetSells.map((r) => r.display_name),
+      ...report.moneyLeftByFunds.map((r) => r.display_name),
+    ]);
+    for (const name of went) assert.equal(left.has(name), false);
+    assert.equal(went.has("Eternal"), true);
+    assert.equal(went.has("HDFC Bank"), false);
+    assert.equal(left.has("HDFC Bank"), true);
+    const hdfcRow = report.topNetSells.find((r) => r.display_name === "HDFC Bank");
+    assert.ok(hdfcRow);
+    assert.equal(hdfcRow.funds_adding, 1);
+    assert.ok((hdfcRow.funds_cutting ?? 0) >= 2);
+  });
+
+  it("requires five funds for a full exit", () => {
+    assert.equal(FULL_EXIT_MIN_FUNDS, 5);
+    const four = buildMonthlyReport(
+      base({
+        diffs: [1, 2, 3, 4].map((id) => {
+          const row = diff(id, gone, -10, -1, "exit");
+          return { ...row, qty: 0, prevQty: 10 };
+        }),
+      }),
+    );
+    assert.equal(four.fullExits.length, 0);
+    const five = buildMonthlyReport(
+      base({
+        diffs: [1, 2, 3, 4, 5].map((id) => {
+          const row = diff(id, gone, -10, -1, "exit");
+          return { ...row, qty: 0, prevQty: 10 };
+        }),
+      }),
+    );
+    assert.equal(five.fullExits.length, 1);
+    assert.equal(five.fullExits[0].funds, 5);
+  });
+
+  it("says funds added, not more funds held", () => {
+    const report = buildMonthlyReport(
+      base({
+        diffs: [diff(1, eternal, 10, 8, "add"), diff(2, eternal, 5, 3, "add")],
+      }),
+    );
+    assert.equal(mostBoughtSentence(report.mostBought), "2 funds added Eternal.");
   });
 
   it("merges duplicate stock names before counting funds", () => {

@@ -1,6 +1,7 @@
 import { pickHoldingsMonth } from "@/lib/holdings-month-pick";
 import { isJunkSector, sectorLabel } from "@/lib/format";
 import { classifyHoldingEvent } from "@/lib/canonical-holdings";
+import { comparableFamilyIds } from "@/lib/mom-universe";
 import {
   collapseChaseGroup,
   groupDuplicateRows,
@@ -14,7 +15,7 @@ export const CONVICTION_MIN_HOUSES = 5;
 export const CONVICTION_MIN_GROWTH = 0.2;
 export const CONVICTION_LIST_CAP = 15;
 export const FRESH_ENTRY_MIN_FUNDS = 2;
-export const FULL_EXIT_MIN_FUNDS = 2;
+export const FULL_EXIT_MIN_FUNDS = 5;
 
 export type ReportDiffRow = {
   family_id: number;
@@ -53,9 +54,15 @@ export type ReportStockRow = {
   display_name: string;
   sector: string;
   funds: number;
+  funds_adding: number;
+  funds_cutting: number;
   fund_houses: number;
   net_value_delta_cr: number;
   examples: ReportFundExample[];
+  adding: ReportFundExample[];
+  cutting: ReportFundExample[];
+  is_conviction: boolean;
+  is_fresh: boolean;
 };
 
 export type ReportSectorRow = {
@@ -86,6 +93,8 @@ export type MonthlyReport = {
   mostSold: ReportStockRow[];
   topNetBuys: ReportStockRow[];
   topNetSells: ReportStockRow[];
+  moneyWentByFunds: ReportStockRow[];
+  moneyLeftByFunds: ReportStockRow[];
   convictionBuys: ReportStockRow[];
   convictionOmitted: number;
   freshEntries: ReportStockRow[];
@@ -102,6 +111,7 @@ export type MonthlyReportInput = {
   priorHoldings: ReportHoldingRow[];
   families: ReportFamily[];
   amcNames: Record<string, string>;
+  amcAum?: Record<string, number>;
   fundHousesTotal: number;
   convictionMinFunds?: number;
   convictionMinHouses?: number;
@@ -157,11 +167,9 @@ function titleAmc(slug: string): string {
 function examplesFrom(
   familyValues: Map<number, number>,
   familyById: Map<number, ReportFamily>,
-  limit = 3,
 ): ReportFundExample[] {
   return [...familyValues.entries()]
-    .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
-    .slice(0, limit)
+    .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]) || a[0] - b[0])
     .map(([id]) => ({
       family_id: id,
       family_name: familyById.get(id)?.name || String(id),
@@ -170,19 +178,35 @@ function examplesFrom(
 
 function stockRow(
   stock: Canonical,
-  funds: Map<number, number>,
+  adding: Map<number, number>,
+  cutting: Map<number, number>,
   houses: Set<string>,
   net: number,
   familyById: Map<number, ReportFamily>,
+  primary: "adding" | "cutting" | "exiting",
+  flags: { conviction: boolean; fresh: boolean },
+  exiting?: Map<number, number>,
 ): ReportStockRow {
+  const addingEx = examplesFrom(adding, familyById);
+  const cuttingEx = examplesFrom(cutting, familyById);
+  const exitingEx = exiting ? examplesFrom(exiting, familyById) : [];
+  const primaryEx = primary === "adding" ? addingEx : primary === "exiting" ? exitingEx : cuttingEx;
+  const primaryCount =
+    primary === "adding" ? adding.size : primary === "exiting" ? (exiting?.size ?? 0) : cutting.size;
   return {
     stock_id: stock.id,
     display_name: stock.display_name,
     sector: stock.sector,
-    funds: funds.size,
+    funds: primaryCount,
+    funds_adding: adding.size,
+    funds_cutting: cutting.size,
     fund_houses: houses.size,
     net_value_delta_cr: net,
-    examples: examplesFrom(funds, familyById),
+    examples: primaryEx,
+    adding: addingEx,
+    cutting: primary === "exiting" ? exitingEx : cuttingEx,
+    is_conviction: flags.conviction,
+    is_fresh: flags.fresh,
   };
 }
 
@@ -201,19 +225,7 @@ export function reportMonthLookup(
   return { status: 200, month: picked.month };
 }
 
-export function comparableFamilyIds(currentFamilyIds: number[], priorFamilyIds: number[]): {
-  included: Set<number>;
-  excludedNoPriorMonth: number;
-} {
-  const prior = new Set(priorFamilyIds);
-  const included = new Set<number>();
-  let excludedNoPriorMonth = 0;
-  for (const id of new Set(currentFamilyIds)) {
-    if (prior.has(id)) included.add(id);
-    else excludedNoPriorMonth += 1;
-  }
-  return { included, excludedNoPriorMonth };
-}
+export { comparableFamilyIds } from "@/lib/mom-universe";
 
 export function buildMonthlyReport(input: MonthlyReportInput): MonthlyReport {
   const convictionMinFunds = input.convictionMinFunds ?? CONVICTION_MIN_FUNDS;
@@ -362,40 +374,6 @@ export function buildMonthlyReport(input: MonthlyReportInput): MonthlyReport {
 
   const allStocks = [...byStock.values()];
 
-  const mostBought = allStocks
-    .filter((s) => s.adding.size > 0)
-    .sort(
-      (a, b) =>
-        b.adding.size - a.adding.size ||
-        b.net - a.net ||
-        a.stock.display_name.localeCompare(b.stock.display_name),
-    )
-    .slice(0, 10)
-    .map((s) => stockRow(s.stock, s.adding, s.addingHouses, s.net, familyById));
-
-  const mostSold = allStocks
-    .filter((s) => s.cutting.size > 0)
-    .sort(
-      (a, b) =>
-        b.cutting.size - a.cutting.size ||
-        a.net - b.net ||
-        a.stock.display_name.localeCompare(b.stock.display_name),
-    )
-    .slice(0, 10)
-    .map((s) => stockRow(s.stock, s.cutting, s.cuttingHouses, s.net, familyById));
-
-  const topNetBuys = allStocks
-    .filter((s) => s.net > 0)
-    .sort((a, b) => b.net - a.net || a.stock.display_name.localeCompare(b.stock.display_name))
-    .slice(0, 10)
-    .map((s) => stockRow(s.stock, s.adding, s.addingHouses, s.net, familyById));
-
-  const topNetSells = allStocks
-    .filter((s) => s.net < 0)
-    .sort((a, b) => a.net - b.net || a.stock.display_name.localeCompare(b.stock.display_name))
-    .slice(0, 10)
-    .map((s) => stockRow(s.stock, s.cutting, s.cuttingHouses, s.net, familyById));
-
   const convictionAll = allStocks
     .filter((s) => {
       if (s.adding.size < convictionMinFunds || s.addingHouses.size < convictionMinHouses) return false;
@@ -411,20 +389,95 @@ export function buildMonthlyReport(input: MonthlyReportInput): MonthlyReport {
         b.net - a.net ||
         a.stock.display_name.localeCompare(b.stock.display_name),
     );
-  const convictionBuys = convictionAll
-    .slice(0, CONVICTION_LIST_CAP)
-    .map((s) => stockRow(s.stock, s.adding, s.addingHouses, s.net, familyById));
-  const convictionOmitted = Math.max(0, convictionAll.length - convictionBuys.length);
+  const convictionIds = new Set(convictionAll.map((s) => s.stock.id));
+  const freshIds = new Set(
+    allStocks.filter((s) => !priorHeld.has(s.stock.id) && s.adding.size >= FRESH_ENTRY_MIN_FUNDS).map((s) => s.stock.id),
+  );
+  const flagsOf = (s: Agg) => ({
+    conviction: convictionIds.has(s.stock.id),
+    fresh: freshIds.has(s.stock.id),
+  });
+  const toRow = (s: Agg, primary: "adding" | "cutting" | "exiting") =>
+    stockRow(
+      s.stock,
+      s.adding,
+      s.cutting,
+      primary === "adding" ? s.addingHouses : s.cuttingHouses,
+      s.net,
+      familyById,
+      primary,
+      flagsOf(s),
+      s.exiting,
+    );
 
-  const freshEntries = allStocks
-    .filter((s) => !priorHeld.has(s.stock.id) && s.adding.size >= FRESH_ENTRY_MIN_FUNDS)
+  const mostBought = allStocks
+    .filter((s) => s.adding.size > 0)
     .sort(
       (a, b) =>
         b.adding.size - a.adding.size ||
         b.net - a.net ||
         a.stock.display_name.localeCompare(b.stock.display_name),
     )
-    .map((s) => stockRow(s.stock, s.adding, s.addingHouses, s.net, familyById));
+    .slice(0, 10)
+    .map((s) => toRow(s, "adding"));
+
+  const mostSold = allStocks
+    .filter((s) => s.cutting.size > 0)
+    .sort(
+      (a, b) =>
+        b.cutting.size - a.cutting.size ||
+        a.net - b.net ||
+        a.stock.display_name.localeCompare(b.stock.display_name),
+    )
+    .slice(0, 10)
+    .map((s) => toRow(s, "cutting"));
+
+  const topNetBuys = allStocks
+    .filter((s) => s.net > 0)
+    .sort((a, b) => b.net - a.net || a.stock.display_name.localeCompare(b.stock.display_name))
+    .slice(0, 10)
+    .map((s) => toRow(s, "adding"));
+
+  const topNetSells = allStocks
+    .filter((s) => s.net < 0)
+    .sort((a, b) => a.net - b.net || a.stock.display_name.localeCompare(b.stock.display_name))
+    .slice(0, 10)
+    .map((s) => toRow(s, "cutting"));
+
+  const moneyWentByFunds = allStocks
+    .filter((s) => s.net > 0 && s.adding.size > 0)
+    .sort(
+      (a, b) =>
+        b.adding.size - a.adding.size ||
+        b.net - a.net ||
+        a.stock.display_name.localeCompare(b.stock.display_name),
+    )
+    .slice(0, 10)
+    .map((s) => toRow(s, "adding"));
+
+  const moneyLeftByFunds = allStocks
+    .filter((s) => s.net < 0 && s.cutting.size > 0)
+    .sort(
+      (a, b) =>
+        b.cutting.size - a.cutting.size ||
+        a.net - b.net ||
+        a.stock.display_name.localeCompare(b.stock.display_name),
+    )
+    .slice(0, 10)
+    .map((s) => toRow(s, "cutting"));
+
+  const convictionBuys = convictionAll.slice(0, CONVICTION_LIST_CAP).map((s) => toRow(s, "adding"));
+  const convictionOmitted = Math.max(0, convictionAll.length - convictionBuys.length);
+
+  const freshEntries = allStocks
+    .filter((s) => freshIds.has(s.stock.id))
+    .sort(
+      (a, b) =>
+        b.adding.size - a.adding.size ||
+        b.net - a.net ||
+        a.stock.display_name.localeCompare(b.stock.display_name),
+    )
+    .map((s) => toRow(s, "adding"));
 
   const fullExits = allStocks
     .filter((s) => s.exiting.size >= FULL_EXIT_MIN_FUNDS)
@@ -434,7 +487,7 @@ export function buildMonthlyReport(input: MonthlyReportInput): MonthlyReport {
         a.net - b.net ||
         a.stock.display_name.localeCompare(b.stock.display_name),
     )
-    .map((s) => stockRow(s.stock, s.exiting, s.cuttingHouses, s.net, familyById));
+    .map((s) => toRow(s, "exiting"));
 
   const sectorNet = new Map<string, number>();
   for (const s of allStocks) {
@@ -476,9 +529,9 @@ export function buildMonthlyReport(input: MonthlyReportInput): MonthlyReport {
     });
   }
   amcBigBets.sort((a, b) => {
-    const av = Math.max(Math.abs(a.buy?.net_value_delta_cr || 0), Math.abs(a.sell?.net_value_delta_cr || 0));
-    const bv = Math.max(Math.abs(b.buy?.net_value_delta_cr || 0), Math.abs(b.sell?.net_value_delta_cr || 0));
-    return bv - av || a.amc_name.localeCompare(b.amc_name);
+    const au = input.amcAum?.[a.amc_slug] ?? 0;
+    const bu = input.amcAum?.[b.amc_slug] ?? 0;
+    return bu - au || a.amc_name.localeCompare(b.amc_name);
   });
 
   return {
@@ -495,6 +548,8 @@ export function buildMonthlyReport(input: MonthlyReportInput): MonthlyReport {
     mostSold,
     topNetBuys,
     topNetSells,
+    moneyWentByFunds,
+    moneyLeftByFunds,
     convictionBuys,
     convictionOmitted,
     freshEntries,

@@ -19,7 +19,7 @@ const headers = {
   "CDN-Cache-Control": OG_CDN_CACHE_CONTROL,
 };
 
-function Logo() {
+export function Logo() {
   return (
     <div style={{ display: "flex", alignItems: "center" }}>
       <div

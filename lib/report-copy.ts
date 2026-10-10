@@ -20,13 +20,15 @@ export function reportListHeadline(report: MonthlyReport): string {
 export function mostBoughtSentence(rows: ReportStockRow[]): string {
   const top = rows[0];
   if (!top) return "";
-  return `${top.funds} more funds held ${top.display_name} this month, the most of any stock.`;
+  const n = top.funds_adding ?? top.funds;
+  return `${n} funds added ${top.display_name}.`;
 }
 
 export function mostSoldSentence(rows: ReportStockRow[]): string {
   const top = rows[0];
   if (!top) return "";
-  return `${top.funds} funds cut or exited ${top.display_name}, the most of any stock.`;
+  const n = top.funds_cutting ?? top.funds;
+  return `${n} funds cut or exited ${top.display_name}.`;
 }
 
 export function topNetBuySentence(rows: ReportStockRow[]): string {
@@ -44,13 +46,15 @@ export function topNetSellSentence(rows: ReportStockRow[]): string {
 export function convictionSentence(rows: ReportStockRow[]): string {
   const top = rows[0];
   if (!top) return "";
-  return `${top.display_name} was added by ${top.funds} funds across ${top.fund_houses} houses.`;
+  const n = top.funds_adding ?? top.funds;
+  return `${n} funds added ${top.display_name} across ${top.fund_houses} houses.`;
 }
 
 export function freshEntrySentence(rows: ReportStockRow[]): string {
   const top = rows[0];
   if (!top) return "";
-  return `${top.display_name} was not in any active-equity book last month; ${top.funds} funds bought it.`;
+  const n = top.funds_adding ?? top.funds;
+  return `${n} funds added ${top.display_name}, a name that was not in any active-equity book last month.`;
 }
 
 export function fullExitSentence(rows: ReportStockRow[]): string {

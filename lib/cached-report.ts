@@ -10,19 +10,31 @@ const ARCHIVE_REVALIDATE_SEC = 60 * 60 * 24 * 30;
 
 async function loadMonthlyReport(month: string): Promise<MonthlyReport> {
   const db = createAnonClient();
-  const [book, families, amcs, coverage] = await Promise.all([
+  const [book, families, amcs, coverage, metrics] = await Promise.all([
     getCanonicalBook(month),
     fetchAllRows<{ id: number; name: string; amc_slug: string | null }>(() =>
       db.from("families").select("id, name, amc_slug"),
     ),
     fetchAllRows<{ slug: string; name: string }>(() => db.from("amcs").select("slug, name")),
     getHoldingsCoverage(month),
+    fetchAllRows<{ scheme_code: string; aum_cr: number | null }>(() =>
+      db.from("scheme_metrics").select("scheme_code, aum_cr"),
+    ),
   ]);
 
   const amcNames: Record<string, string> = {};
   for (const a of amcs) {
     const slug = (a.slug || "").trim().toLowerCase();
     if (slug) amcNames[slug] = a.name;
+  }
+  const slugByFamily = new Map(
+    families.map((f) => [String(f.id), (f.amc_slug || "").trim().toLowerCase()]),
+  );
+  const amcAum: Record<string, number> = {};
+  for (const m of metrics) {
+    const slug = slugByFamily.get(String(m.scheme_code));
+    if (!slug) continue;
+    amcAum[slug] = (amcAum[slug] || 0) + (Number(m.aum_cr) || 0);
   }
 
   return buildMonthlyReport({
@@ -56,16 +68,17 @@ async function loadMonthlyReport(month: string): Promise<MonthlyReport> {
       amc_slug: (f.amc_slug || "").trim().toLowerCase(),
     })),
     amcNames,
+    amcAum,
     fundHousesTotal: coverage.total,
   });
 }
 
-const getMonthlyReportLatest = unstable_cache(loadMonthlyReport, ["monthly-report-v3-latest"], {
+const getMonthlyReportLatest = unstable_cache(loadMonthlyReport, ["monthly-report-v4-latest"], {
   revalidate: HOLDINGS_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS],
 });
 
-const getMonthlyReportArchive = unstable_cache(loadMonthlyReport, ["monthly-report-v3-archive"], {
+const getMonthlyReportArchive = unstable_cache(loadMonthlyReport, ["monthly-report-v4-archive"], {
   revalidate: ARCHIVE_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS],
 });

@@ -72,8 +72,8 @@ describe("computeCanonicalBook", () => {
     const row = book.chase.find((r) => r.display_name.includes("TD Power"));
     assert.ok(row);
     assert.equal(row.fund_count, 70);
-    assert.equal(row.fund_count_delta, 5);
-    assert.equal(row.fund_count_delta, row.fund_count - book.priorCount[row.stock_id]);
+    assert.equal(row.fund_count_delta, 0);
+    assert.equal(book.excludedNoPriorMonth, 5);
     const switcher = book.deltas.find((d) => d.family_id === 61);
     assert.ok(switcher && switcher.event !== "new" && switcher.event !== "exit");
     assert.ok(switcher.event === "hold" || switcher.event === "add" || switcher.event === "cut");
@@ -111,5 +111,37 @@ describe("computeCanonicalBook", () => {
     assert.ok(book.deltas.every((d) => d.event !== "exit"));
     const f1 = book.deltas.find((d) => d.family_id === 1);
     assert.equal(f1?.event, "cut");
+  });
+
+  it("drops first-disclosure funds from net ₹ and add/new events but keeps them in fund_count", () => {
+    const prior = [line(1, "et", "Eternal Limited", 100, { market_value_cr: 10 })];
+    const current = [
+      line(1, "et", "Eternal Limited", 80, { market_value_cr: 8 }),
+      line(99, "et", "Eternal Limited", 5_000, { market_value_cr: 9_000 }),
+    ];
+    const book = computeCanonicalBook("2026-08", current, prior);
+    const row = book.chase.find((r) => r.display_name.includes("Eternal"));
+    assert.ok(row);
+    assert.equal(row.fund_count, 2);
+    assert.equal(row.fund_count_delta, 0);
+    assert.ok(row.net_value_delta_cr < 0);
+    assert.ok(Math.abs(row.net_value_delta_cr - -2) < 1e-9);
+    const newbie = book.deltas.find((d) => d.family_id === 99);
+    assert.equal(newbie?.event, "hold");
+    assert.equal(newbie?.qty_delta, 0);
+    assert.equal(newbie?.qty > 0, true);
+    assert.equal(book.excludedNoPriorMonth, 1);
+  });
+
+  it("does not count mark-to-market holds in net ₹", () => {
+    const prior = [line(1, "et", "Eternal Limited", 100, { market_value_cr: 10 })];
+    const current = [line(1, "et", "Eternal Limited", 100, { market_value_cr: 25 })];
+    const book = computeCanonicalBook("2026-08", current, prior);
+    const row = book.chase[0];
+    assert.equal(row.net_qty_delta, 0);
+    assert.equal(row.net_value_delta_cr, 0);
+    assert.equal(row.fund_count, 1);
+    assert.equal(book.deltas[0].event, "hold");
+    assert.equal(book.deltas[0].value_delta_cr, 0);
   });
 });

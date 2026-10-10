@@ -35,6 +35,17 @@ export function formatDataAsOfLine(opts: {
   return parts.join(" · ");
 }
 
+/** Last calendar day of a YYYY-MM book, e.g. "31 Aug 2026". */
+export function formatMonthEnd(month: string | null | undefined): string {
+  if (!month || month.length < 7) return "";
+  const [ys, ms] = month.split("-");
+  const y = Number(ys);
+  const m = Number(ms);
+  if (!y || !m) return "";
+  const last = new Date(y, m, 0).getDate();
+  return `${last} ${IST_MONTHS[m - 1]} ${y}`;
+}
+
 export function formatMonthShort(month: string | null | undefined): string {
   if (!month || month.length < 7) return "—";
   const [y, m] = month.split("-");
@@ -118,7 +129,7 @@ export function formatNumber(n: number | null | undefined, digits = 2): string {
 /** Compact share count for home previews, e.g. +12.4M sh. */
 export function formatCompactShares(n: number | null | undefined): string {
   if (n === null || n === undefined || Number.isNaN(n)) return "—";
-  const sign = n > 0 ? "+" : n < 0 ? "-" : "";
+  const sign = n > 0 ? "+" : n < 0 ? "−" : "";
   const abs = Math.abs(n);
   const body =
     abs >= 1_000_000_000
@@ -133,8 +144,8 @@ export function formatCompactShares(n: number | null | undefined): string {
 
 export function formatDelta(n: number | null | undefined, digits = 2): string {
   if (n === null || n === undefined || Number.isNaN(n)) return "—";
-  const sign = n > 0 ? "+" : "";
-  return sign + formatNumber(n, digits);
+  const sign = n > 0 ? "+" : n < 0 ? "−" : "";
+  return sign + formatNumber(Math.abs(n), digits);
 }
 
 export function num(v: unknown): number {

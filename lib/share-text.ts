@@ -6,8 +6,8 @@ export function formatCr(n: number, digits = 1): string {
 }
 
 export function formatSignedCr(n: number, digits = 1): string {
-  const sign = n > 0 ? "+" : "";
-  return `${sign}${formatNumber(n, digits)} ₹ cr`;
+  const sign = n > 0 ? "+" : n < 0 ? "−" : "";
+  return `${sign}${formatNumber(Math.abs(n), digits)} ₹ cr`;
 }
 
 export type NamedMove = { family_name: string; event: string; qty_delta: number };

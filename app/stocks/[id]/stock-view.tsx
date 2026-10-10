@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useLayoutEffect, useState } from "react";
 import { LoadError, Skeleton, TableSkeleton, UpdatingNote } from "@/components/load-ui";
+import { SectorPill } from "@/components/sector-pill";
 import { ShareBar } from "@/components/share-bar";
 import { Delta, loadWatchlist, saveWatchlist } from "@/components/ui";
 import { formatMonthLabel, formatNumber } from "@/lib/format";
@@ -146,7 +147,9 @@ function StockPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-medium">{data.stock?.display_name}</h1>
-          <p className="text-sm text-muted">{data.stock?.sector || "Unclassified"}</p>
+          <p className="mt-1">
+            <SectorPill sector={data.stock?.sector || "Unclassified"} />
+          </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-3">
           {updating ? <UpdatingNote /> : null}
@@ -154,7 +157,7 @@ function StockPage() {
           <button
             className={`rounded-md border px-3 py-1 text-sm ${
               watch.includes(id)
-                ? "border-foreground bg-foreground text-background"
+                ? "border-accent bg-accent text-accent-fg"
                 : "border-border text-muted hover:text-foreground"
             }`}
             onClick={toggle}

@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { SectorPill } from "@/components/sector-pill";
 import { DataAsOfNote, UnavailableMonthNote } from "@/components/ui";
+import { sectorFill } from "@/lib/sector-color";
 import { assetClassMeta, parseAssetClass } from "@/lib/fund-class";
 import { overlapVerdict, type CommonHolding, type OverlapLine } from "@/lib/fund-overlap";
 import { formatMonthLabel, formatNumber } from "@/lib/format";
@@ -366,7 +368,9 @@ function CommonTable({
                     {row.name}
                   </Link>
                 </td>
-                <td className="py-2 pr-3 text-muted">{row.sector}</td>
+                <td className="py-2 pr-3">
+                  <SectorPill sector={row.sector} />
+                </td>
                 {funds.map((f) => (
                   <td key={f.code} className="py-2 pr-3 tabular-nums">
                     {formatNumber(row.weights[f.code] ?? null, 2)}
@@ -442,8 +446,11 @@ function SectorBars({ pair, funds }: { pair: Pair; funds: FundInfo[] }) {
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <span className="w-24 shrink-0 truncate text-[11px] text-faint">{shortName(a?.name || "")}</span>
-                <div className="h-1.5 flex-1 rounded-full bg-surface">
-                  <div className="h-1.5 rounded-full bg-foreground/70" style={{ width: `${(r.a / max) * 100}%` }} />
+                <div className="h-1.5 flex-1 rounded-full bg-raised">
+                  <div
+                    className="h-1.5 rounded-full"
+                    style={{ width: `${(r.a / max) * 100}%`, background: sectorFill(r.name) }}
+                  />
                 </div>
                 <span className="w-10 shrink-0 text-right text-[11px] tabular-nums text-muted">
                   {formatNumber(r.a, 1)}
@@ -451,8 +458,11 @@ function SectorBars({ pair, funds }: { pair: Pair; funds: FundInfo[] }) {
               </div>
               <div className="flex items-center gap-2">
                 <span className="w-24 shrink-0 truncate text-[11px] text-faint">{shortName(b?.name || "")}</span>
-                <div className="h-1.5 flex-1 rounded-full bg-surface">
-                  <div className="h-1.5 rounded-full bg-foreground/40" style={{ width: `${(r.b / max) * 100}%` }} />
+                <div className="h-1.5 flex-1 rounded-full bg-raised">
+                  <div
+                    className="h-1.5 rounded-full opacity-70"
+                    style={{ width: `${(r.b / max) * 100}%`, background: sectorFill(r.name) }}
+                  />
                 </div>
                 <span className="w-10 shrink-0 text-right text-[11px] tabular-nums text-muted">
                   {formatNumber(r.b, 1)}

@@ -49,10 +49,10 @@ export default async function RootLayout({
     }
   }
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} font-sans antialiased bg-background text-foreground`}>
         <Script id="mf-chase-theme" strategy="beforeInteractive">
-          {`(function(){try{var t=localStorage.getItem("mf-chase-theme");var dark=t!=="light";if(dark)document.documentElement.classList.add("dark");else document.documentElement.classList.remove("dark");}catch(e){document.documentElement.classList.add("dark");}})();`}
+          {`(function(){try{var t=localStorage.getItem("mf-chase-theme");var dark=t==="dark"||(t!=="light"&&window.matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",dark);}catch(e){try{document.documentElement.classList.toggle("dark",window.matchMedia("(prefers-color-scheme: dark)").matches);}catch(e2){}}})();`}
         </Script>
         {process.env.NODE_ENV === "production" ? (
           <Script

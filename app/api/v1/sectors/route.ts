@@ -22,8 +22,8 @@ export async function GET(req: NextRequest) {
       }
       return jsonCached({ month: null, rows: [] }, HOLDINGS_CACHE_CONTROL);
     }
-    const rows = await getSectorRows(picked.month);
-    return jsonCached({ month: picked.month, rows }, HOLDINGS_CACHE_CONTROL);
+    const { rows, excludedNoPriorMonth } = await getSectorRows(picked.month);
+    return jsonCached({ month: picked.month, rows, excludedNoPriorMonth }, HOLDINGS_CACHE_CONTROL);
   } catch (e) {
     return jsonNoStore({ error: e instanceof Error ? e.message : "sectors_failed" }, 500);
   }
