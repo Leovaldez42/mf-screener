@@ -3,8 +3,13 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { AddsCutsLink } from "@/components/adds-cuts-link";
 import { PrefetchHome } from "@/components/prefetch-home";
-import { getChasePreview, getHoldingsCoverage, resolveHoldingsMonth } from "@/lib/cached-holdings";
-import { formatMonthLabel, formatMonthShort, formatCompactShares } from "@/lib/format";
+import { DataAsOfNote, UnavailableMonthNote } from "@/components/ui";
+import { getChasePreview, getHoldingsCoverage } from "@/lib/cached-holdings";
+import { getMonthlyReport } from "@/lib/cached-report";
+import { reportListHeadline } from "@/lib/report-copy";
+import { formatMonthShort, formatCompactShares } from "@/lib/format";
+import { listCompleteMonths } from "@/lib/holdings-month";
+import { pageHoldingsMonth } from "@/lib/holdings-month-pick";
 import { supabaseConfigured } from "@/lib/supabase";
 import type { ChaseRow } from "@/lib/types";
 
@@ -27,11 +32,9 @@ type Preview = {
   coverageTotal: number | null;
 };
 
-async function loadPreview(): Promise<Preview | null> {
-  if (!supabaseConfigured()) return null;
+async function loadPreview(month: string | null): Promise<Preview | null> {
+  if (!supabaseConfigured() || !month) return null;
   try {
-    const month = await resolveHoldingsMonth(null);
-    if (!month) return null;
     const { inflows, outflows } = await getChasePreview(month);
     if (!inflows.length && !outflows.length) return null;
     let coveragePct: number | null = null;
@@ -59,6 +62,28 @@ async function loadPreview(): Promise<Preview | null> {
     console.error("homepage preview failed", err);
     return null;
   }
+}
+
+async function ThisMonthReportCard({ month }: { month: string }) {
+  let report: Awaited<ReturnType<typeof getMonthlyReport>> | null = null;
+  try {
+    report = await getMonthlyReport(month);
+  } catch (err) {
+    console.error("homepage report card failed", err);
+    return null;
+  }
+  return (
+    <section>
+      <Link
+        href={`/reports/${month}`}
+        className="block rounded-lg border border-border bg-card p-4 hover:border-faint"
+      >
+        <div className="text-xs uppercase tracking-[0.12em] text-faint">This month&apos;s report</div>
+        <h2 className="mt-2 text-lg font-medium">What fund managers bought</h2>
+        <p className="mt-1 text-sm text-muted">{reportListHeadline(report)}</p>
+      </Link>
+    </section>
+  );
 }
 
 function MoveList({
@@ -114,8 +139,22 @@ function Desk({
   );
 }
 
-export default async function LandingPage() {
-  const preview = await loadPreview();
+export default async function LandingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ month?: string }>;
+}) {
+  const requested = ((await searchParams).month || "").trim();
+  let preview: Preview | null = null;
+  if (supabaseConfigured()) {
+    try {
+      const months = await listCompleteMonths();
+      const showing = pageHoldingsMonth(requested, months).month;
+      preview = await loadPreview(showing || null);
+    } catch (err) {
+      console.error("homepage preview failed", err);
+    }
+  }
 
   return (
     <div className="space-y-12">
@@ -192,6 +231,10 @@ export default async function LandingPage() {
         </div>
       </section>
 
+      {preview?.month ? (
+        <ThisMonthReportCard month={preview.month} />
+      ) : null}
+
       {preview ? (
         <section>
           <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -200,7 +243,10 @@ export default async function LandingPage() {
               See all adds and cuts
             </AddsCutsLink>
           </div>
-          <p className="mt-1 text-sm text-muted">Holdings as of {formatMonthLabel(preview.month)}.</p>
+          <div className="mt-1 space-y-0.5">
+            <UnavailableMonthNote requested={requested} showing={preview.month} />
+            <DataAsOfNote />
+          </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <MoveList label="Biggest inflows" rows={preview.inflows} month={preview.month} tone="gain" />
             <MoveList label="Biggest outflows" rows={preview.outflows} month={preview.month} tone="loss" />

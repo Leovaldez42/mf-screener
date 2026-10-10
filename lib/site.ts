@@ -22,6 +22,12 @@ export function ogMonthPath(month: string) {
   return `/api/og/month/${month}?v=${OG_TEMPLATE_VERSION}`;
 }
 
+export function ogReportPath(month: string, section?: string) {
+  if (!section) return `/reports/${month}/opengraph-image`;
+  const q = new URLSearchParams({ month, section, v: OG_TEMPLATE_VERSION });
+  return `/api/og/report?${q}`;
+}
+
 export function isYearMonth(value: string | null | undefined): value is string {
   return Boolean(value && /^\d{4}-(0[1-9]|1[0-2])$/.test(value));
 }

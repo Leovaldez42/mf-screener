@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { StockView } from "./stock-view";
 import { getStockPayload } from "@/lib/cached-holdings";
 import { formatMonthLabel } from "@/lib/format";
@@ -15,7 +16,7 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   const { month: q } = await searchParams;
   const payload = await getStockPayload(id, q || "");
   if ("error" in payload && payload.error === "not_found") {
-    return { title: "Stock not found" };
+    notFound();
   }
   const name = String(payload.stock?.display_name || "Stock");
   const month = payload.month || "";
@@ -51,6 +52,10 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   };
 }
 
-export default function StockRoute() {
+export default async function StockRoute({ params, searchParams }: Props) {
+  const { id } = await params;
+  const { month: q } = await searchParams;
+  const payload = await getStockPayload(id, q || "");
+  if ("error" in payload && payload.error === "not_found") notFound();
   return <StockView />;
 }

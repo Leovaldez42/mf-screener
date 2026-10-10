@@ -2,6 +2,9 @@ import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import Script from "next/script";
 import { Shell } from "@/components/ui";
+import { getDataFreshness } from "@/lib/data-freshness";
+import { listCompleteMonths } from "@/lib/holdings-month";
+import { supabaseConfigured } from "@/lib/supabase";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -31,11 +34,20 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  let freshness = null;
+  let months: string[] = [];
+  if (supabaseConfigured()) {
+    try {
+      [freshness, months] = await Promise.all([getDataFreshness(), listCompleteMonths()]);
+    } catch (err) {
+      console.error("layout freshness failed", err);
+    }
+  }
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
       <body className={`${geistSans.variable} font-sans antialiased bg-background text-foreground`}>
@@ -49,7 +61,7 @@ export default function RootLayout({
             strategy="lazyOnload"
           />
         ) : null}
-        <Shell>{children}</Shell>
+        <Shell freshness={freshness} months={months}>{children}</Shell>
       </body>
     </html>
   );

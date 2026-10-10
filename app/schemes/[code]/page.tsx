@@ -63,7 +63,8 @@ export default function SchemePage() {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {stats.map((stat) => {
           const value = scheme[stat.key];
-          const num = typeof value === "number" ? value : null;
+          const hiddenInception = stat.key === "cagr_inception" && scheme.inception_cagr_reliable === false;
+          const num = hiddenInception ? null : typeof value === "number" ? value : null;
           const avg =
             categoryAverage && stat.key in categoryAverage
               ? (categoryAverage[stat.key as keyof CategoryAverage] as number | null)
@@ -74,7 +75,9 @@ export default function SchemePage() {
           return (
             <div key={stat.label} className="rounded border border-border px-3 py-2">
               <div className="text-xs text-faint">{stat.label}</div>
-              <div className="text-lg">{formatNumber(num, stat.digits)}</div>
+              <div className="text-lg" title={hiddenInception ? "Vendor value looks wrong, hidden" : undefined}>
+                {formatNumber(num, stat.digits)}
+              </div>
               <div className="mt-1 text-xs text-faint">
                 Cat avg {formatNumber(avg, stat.digits)}
                 {delta != null ? (

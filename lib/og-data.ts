@@ -1,6 +1,6 @@
 import { cleanChaseRows } from "@/lib/chase-clean";
 import { getChaseRows, getStockPayload } from "@/lib/cached-holdings";
-import { sectorLabel } from "@/lib/format";
+import { isJunkSector, sectorLabel } from "@/lib/format";
 import { shortenFundName } from "@/lib/fund-name";
 import { listCompleteMonths } from "@/lib/holdings-month";
 import { isYearMonth } from "@/lib/site";
@@ -87,7 +87,7 @@ export async function loadOgMonthCard(requestedMonth: string): Promise<OgMonthCa
   const sectorTotals = new Map<string, number>();
   for (const r of cleaned) {
     const key = sectorLabel(r.sector);
-    if (key === "Unknown") continue;
+    if (isJunkSector(r.sector) && (r.sector || "").trim()) continue;
     sectorTotals.set(key, (sectorTotals.get(key) ?? 0) + r.net_value_delta_cr);
   }
   const leading = [...sectorTotals.entries()].sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))[0];

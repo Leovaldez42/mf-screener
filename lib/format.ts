@@ -5,6 +5,36 @@ export function formatMonthLabel(month: string | null | undefined): string {
   return date.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
 }
 
+const IST_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+export function formatDayLabel(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "numeric",
+    year: "numeric",
+    timeZone: "Asia/Kolkata",
+  }).formatToParts(d);
+  const day = parts.find((p) => p.type === "day")?.value;
+  const month = Number(parts.find((p) => p.type === "month")?.value);
+  const year = parts.find((p) => p.type === "year")?.value;
+  if (!day || !month || !year) return "";
+  return `${day} ${IST_MONTHS[month - 1]} ${year}`;
+}
+
+export function formatDataAsOfLine(opts: {
+  holdingsMonth?: string | null;
+  returnsUpdated?: string | null;
+}): string {
+  const parts: string[] = [];
+  if (opts.holdingsMonth) parts.push(`Holdings: ${formatMonthLabel(opts.holdingsMonth)}`);
+  const returns = formatDayLabel(opts.returnsUpdated);
+  if (returns) parts.push(`Returns updated ${returns}`);
+  return parts.join(" · ");
+}
+
 export function formatMonthShort(month: string | null | undefined): string {
   if (!month || month.length < 7) return "—";
   const [y, m] = month.split("-");
@@ -60,7 +90,7 @@ export function normalizeSectorKey(sector: string | null | undefined): string {
 /** Empty / missing industry labels. Matches Sectors rollup. */
 export function sectorLabel(sector: string | null | undefined): string {
   const s = canonicalizeSector(sector || "");
-  return s || "Unknown";
+  return s || "Unclassified";
 }
 
 /**

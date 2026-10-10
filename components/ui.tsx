@@ -2,12 +2,63 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useLayoutEffect, useState } from "react";
+import { createContext, Suspense, useContext, useLayoutEffect, useState, useSyncExternalStore } from "react";
 import { LoadError } from "@/components/load-ui";
 import { ThemeToggle } from "@/components/theme";
-import { formatMonthLabel, formatMonthShort } from "@/lib/format";
-import { loadMonths, peekCoverage, peekMonths } from "@/lib/load-months";
+import type { DataFreshness } from "@/lib/data-freshness";
+import { formatDataAsOfLine, formatDayLabel, formatMonthLabel, formatMonthShort } from "@/lib/format";
+import { pageHoldingsMonth } from "@/lib/holdings-month-pick";
+import { loadMonths, peekCoverage, peekFreshness, peekMonths } from "@/lib/load-months";
 import { prefetchHomeData } from "@/lib/prefetch-home";
+import { sessionCacheSet, sessionCacheSubscribe } from "@/lib/session-cache";
+
+const FreshnessContext = createContext<DataFreshness | null>(null);
+const MonthsContext = createContext<string[]>([]);
+
+export function useHoldingsMonths(): string[] {
+  const layoutMonths = useContext(MonthsContext);
+  const cached = useSyncExternalStore(sessionCacheSubscribe, peekMonths, () => layoutMonths);
+  return cached.length ? cached : layoutMonths;
+}
+
+export function UnavailableMonthNote({ requested, showing }: { requested: string; showing: string }) {
+  if (!requested || !showing || requested === showing) return null;
+  return (
+    <p className="text-xs text-muted">
+      {formatMonthLabel(requested)} isn&apos;t available yet, showing {formatMonthLabel(showing)}
+    </p>
+  );
+}
+
+export function DataAsOfNote({
+  variant = "full",
+  freshness: freshnessProp,
+}: {
+  variant?: "full" | "returns";
+  freshness?: DataFreshness | null;
+}) {
+  const fromLayout = useContext(FreshnessContext);
+  const peeked = useSyncExternalStore(sessionCacheSubscribe, peekFreshness, () => freshnessProp ?? fromLayout ?? null);
+  const freshness = freshnessProp ?? fromLayout ?? peeked;
+  if (variant === "returns") {
+    const returns = formatDayLabel(freshness?.returnsUpdated);
+    if (!returns) return null;
+    return <p className="text-[11px] leading-4 text-muted">Returns updated {returns}</p>;
+  }
+  const line = formatDataAsOfLine({
+    holdingsMonth: freshness?.holdingsMonth,
+    returnsUpdated: freshness?.returnsUpdated,
+  });
+  if (!line) return null;
+  return (
+    <div className="space-y-0.5">
+      <p className="text-[11px] leading-4 text-muted">{line}</p>
+      {freshness?.stale ? (
+        <p className="text-[11px] leading-4 text-faint">Newer holdings are not available yet.</p>
+      ) : null}
+    </div>
+  );
+}
 
 function MonthSelectFallback() {
   return (
@@ -36,21 +87,25 @@ function MonthSelect() {
   const pathname = usePathname();
   const search = useSearchParams();
   const router = useRouter();
-  const [months, setMonths] = useState<string[]>([]);
-  const [status, setStatus] = useState<"boot" | "loading" | "ready" | "error">("boot");
-  const month = search.get("month") || months[0] || "";
+  const layoutMonths = useContext(MonthsContext);
+  const cachedMonths = useSyncExternalStore(sessionCacheSubscribe, peekMonths, () => layoutMonths);
+  const months = cachedMonths.length ? cachedMonths : layoutMonths;
+  const [status, setStatus] = useState<"boot" | "loading" | "ready" | "error">(
+    months.length ? "ready" : "boot",
+  );
+  const requested = search.get("month") || "";
+  const picked = pageHoldingsMonth(requested, months);
+  const month = picked.month;
 
   function refresh() {
     if (!peekMonths().length) setStatus("loading");
     loadMonths()
-      .then((next) => {
-        setMonths(next);
+      .then(() => {
         setStatus("ready");
       })
       .catch(() => {
         const cached = peekMonths();
-        if (cached.length) {
-          setMonths(cached);
+        if (cached.length || layoutMonths.length) {
           setStatus("ready");
         } else {
           setStatus("error");
@@ -61,29 +116,24 @@ function MonthSelect() {
   useLayoutEffect(() => {
     queueMicrotask(() => {
       const cached = peekMonths();
-      if (cached.length) {
-        setMonths(cached);
-        setStatus("ready");
-      } else {
-        setStatus("loading");
-      }
-      if (!peekMonths().length) setStatus("loading");
-      loadMonths()
-        .then((next) => {
-          setMonths(next);
+        if (cached.length || layoutMonths.length) {
           setStatus("ready");
-        })
-        .catch(() => {
-          const cachedMonths = peekMonths();
-          if (cachedMonths.length) {
-            setMonths(cachedMonths);
+        } else {
+          setStatus("loading");
+        }
+        loadMonths()
+          .then(() => {
             setStatus("ready");
-          } else {
-            setStatus("error");
-          }
-        });
+          })
+          .catch(() => {
+            if (peekMonths().length || layoutMonths.length) {
+              setStatus("ready");
+            } else {
+              setStatus("error");
+            }
+          });
     });
-  }, [month]);
+  }, [month, layoutMonths.length]);
 
   function setMonth(next: string) {
     if (pathname.startsWith("/month/")) {
@@ -111,21 +161,24 @@ function MonthSelect() {
   }
 
   return (
-    <div className="flex h-8 w-full flex-wrap items-center gap-2 text-sm">
-      <span className="text-muted">Holdings as of</span>
-      <select
-        className="h-8 min-w-0 flex-1 rounded border border-border bg-input px-2 py-1 md:flex-none"
-        value={month}
-        onChange={(e) => setMonth(e.target.value)}
-      >
-        {months.length === 0 ? <option value="">No data</option> : null}
-        {months.map((m) => (
-          <option key={m} value={m}>
-            {formatMonthLabel(m)}
-          </option>
-        ))}
-      </select>
-      <CoverageChip month={month} latest={months[0] || ""} />
+    <div className="space-y-1">
+      <div className="flex h-8 w-full flex-wrap items-center gap-2 text-sm">
+        <span className="text-muted">Holdings as of</span>
+        <select
+          className="h-8 min-w-0 flex-1 rounded border border-border bg-input px-2 py-1 md:flex-none"
+          value={month}
+          onChange={(e) => setMonth(e.target.value)}
+        >
+          {months.length === 0 ? <option value="">No data</option> : null}
+          {months.map((m) => (
+            <option key={m} value={m}>
+              {formatMonthLabel(m)}
+            </option>
+          ))}
+        </select>
+        <CoverageChip month={month} latest={months[0] || ""} />
+      </div>
+      <DataAsOfNote />
     </div>
   );
 }
@@ -135,7 +188,9 @@ const NAV_GROUPS = [
     label: "Research",
     items: [
       { href: "/adds-cuts", label: "Adds & cuts" },
+      { href: "/reports", label: "Reports" },
       { href: "/sectors", label: "Sectors" },
+      { href: "/overlap", label: "Overlap" },
     ],
   },
   {
@@ -170,6 +225,8 @@ function isWidePath(pathname: string) {
     isResearchPath(pathname) ||
     pathname === "/screener" ||
     pathname === "/compare" ||
+    pathname === "/overlap" ||
+    pathname.startsWith("/reports") ||
     pathname.startsWith("/schemes/")
   );
 }
@@ -234,7 +291,15 @@ function NavGroups({ pathname, stacked }: { pathname: string; stacked?: boolean 
   );
 }
 
-export function Shell({ children }: { children: React.ReactNode }) {
+export function Shell({
+  children,
+  freshness,
+  months = [],
+}: {
+  children: React.ReactNode;
+  freshness?: DataFreshness | null;
+  months?: string[];
+}) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPath, setMenuPath] = useState(pathname);
@@ -243,12 +308,18 @@ export function Shell({ children }: { children: React.ReactNode }) {
     setMenuOpen(false);
   }
 
-  const showMonth = isResearchPath(pathname);
+  const showMonth = isResearchPath(pathname) && !pathname.startsWith("/funds/");
+  useLayoutEffect(() => {
+    if (months.length && !peekMonths().length) sessionCacheSet("months", months);
+    loadMonths().catch(() => undefined);
+  }, [months]);
   const home = pathname === "/";
   const wide = isWidePath(pathname);
   const mainWidth = home ? "max-w-5xl" : wide ? "max-w-6xl" : "max-w-3xl";
 
   return (
+    <MonthsContext.Provider value={months}>
+    <FreshnessContext.Provider value={freshness ?? null}>
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <header className="z-40 border-b border-border bg-card">
         <div className="flex w-full flex-nowrap items-center gap-6 px-4 py-3 lg:px-6">
@@ -312,7 +383,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
         ) : null}
       </header>
       <main className={`mx-auto w-full ${mainWidth} flex-1 px-4 py-6 lg:px-6`}>{children}</main>
+      <footer className="border-t border-border">
+        <div className={`mx-auto w-full ${mainWidth} px-4 py-2 lg:px-6`}>
+          <DataAsOfNote freshness={freshness} />
+        </div>
+      </footer>
     </div>
+    </FreshnessContext.Provider>
+    </MonthsContext.Provider>
   );
 }
 

@@ -7,5 +7,9 @@
   "eslint.options": {
     "warnIgnored": false
   },
-  "eslint.lintTask.options": "--no-warn-ignored"
+  "eslint.lintTask.options": "--no-warn-ignored .",
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    ".local-shots/pw/node_modules/**": true
+  }
 }

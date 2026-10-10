@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
-import { getChaseRows, resolveHoldingsMonth } from "@/lib/cached-holdings";
+import { getChaseRows, requireHoldingsMonth } from "@/lib/cached-holdings";
 import { HOLDINGS_CACHE_CONTROL, jsonCached, jsonNoStore } from "@/lib/http-cache";
+import { instrumentSectorLabel, isEquityInstrument } from "@/lib/instruments";
 import { createAnonClient, supabaseConfigured } from "@/lib/supabase";
 import type { ChaseRow } from "@/lib/types";
 
@@ -22,8 +23,18 @@ export async function GET(req: NextRequest) {
   let monthToUse: string | null;
   let data: ChaseRow[];
   try {
-    monthToUse = await resolveHoldingsMonth(month);
-    if (!monthToUse) return jsonCached({ month: null, rows: [] as ChaseRow[] }, HOLDINGS_CACHE_CONTROL);
+    const picked = await requireHoldingsMonth(month);
+    if (!picked.ok) {
+      if (picked.unknown) {
+        return jsonCached(
+          { error: "unknown_month", availableMonths: picked.availableMonths },
+          HOLDINGS_CACHE_CONTROL,
+          404,
+        );
+      }
+      return jsonCached({ month: null, rows: [] as ChaseRow[] }, HOLDINGS_CACHE_CONTROL);
+    }
+    monthToUse = picked.month;
     data = await getChaseRows(monthToUse);
   } catch (e) {
     return jsonNoStore({ error: e instanceof Error ? e.message : "chase_failed" }, 500);
@@ -44,12 +55,16 @@ export async function GET(req: NextRequest) {
     const missing = ids.filter((id) => !have.has(id));
     if (missing.length) {
       const db = createAnonClient();
-      const { data: stocks } = await db.from("stocks").select("id, display_name, sector").in("id", missing);
+      const { data: stocks } = await db.from("stocks").select("id, display_name, sector, isin").in("id", missing);
       for (const s of stocks || []) {
         rows.push({
           stock_id: s.id as string,
           display_name: String(s.display_name),
-          sector: (s.sector as string | null) ?? null,
+          sector: instrumentSectorLabel({
+            display_name: String(s.display_name),
+            sector: (s.sector as string | null) ?? null,
+            isin: (s.isin as string | null) ?? null,
+          }),
           fund_count: 0,
           fund_count_delta: 0,
           net_qty_delta: 0,
@@ -63,6 +78,7 @@ export async function GET(req: NextRequest) {
   } else {
     rows.sort((a, b) => Math.abs(b.net_value_delta_cr) - Math.abs(a.net_value_delta_cr));
   }
+  rows = rows.filter((r) => isEquityInstrument(r));
 
   const total = rows.length;
   const limit = Number(req.nextUrl.searchParams.get("limit") || "0");

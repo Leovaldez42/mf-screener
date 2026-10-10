@@ -146,7 +146,7 @@ function StockPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-medium">{data.stock?.display_name}</h1>
-          <p className="text-sm text-muted">{data.stock?.sector || "No sector"}</p>
+          <p className="text-sm text-muted">{data.stock?.sector || "Unclassified"}</p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-3">
           {updating ? <UpdatingNote /> : null}

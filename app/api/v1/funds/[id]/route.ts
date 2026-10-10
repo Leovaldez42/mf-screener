@@ -17,7 +17,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const month = req.nextUrl.searchParams.get("month") || "";
   try {
     const payload = await getFundPayload(familyId, month);
-    if ("error" in payload && payload.error === "no_holdings") {
+    if ("error" in payload && (payload.error === "not_found" || payload.error === "unknown_month")) {
       return jsonCached(payload, HOLDINGS_CACHE_CONTROL, 404);
     }
     return jsonCached(payload, HOLDINGS_CACHE_CONTROL);

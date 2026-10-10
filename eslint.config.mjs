@@ -10,7 +10,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "**/node_modules/**",
-    "!next-env.d.ts",
+    ".local-shots/**",
+    "next-env.d.ts",
   ]),
 ]);
 

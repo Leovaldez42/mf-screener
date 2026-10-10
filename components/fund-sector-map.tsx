@@ -72,6 +72,8 @@ export function FundSectorMap({ sectors }: { sectors: FundSector[] }) {
 
   const { sorted, equity, cash, top, rest, restWeight, colorByName } = model;
   const showCash = cash >= CASH_EPS;
+  const shownEquity = top.reduce((sum, s) => sum + s.weight_pct, 0) + restWeight;
+  const showPartialBookHint = Math.abs(shownEquity - equity) > 2;
 
   const sheetRows = useMemo(() => {
     const rows: { name: string; weight_pct: number; swatch: string }[] = sorted.map((s) => ({
@@ -100,7 +102,9 @@ export function FundSectorMap({ sectors }: { sectors: FundSector[] }) {
           Total 100%
         </p>
       </div>
-      <p className="text-xs text-faint">Top holdings by weight — not the full book.</p>
+      {showPartialBookHint ? (
+        <p className="text-xs text-faint">Top holdings by weight — not the full book.</p>
+      ) : null}
 
       <div className="space-y-2">
         {top.map((s) => (
