@@ -5,6 +5,47 @@ export function formatMonthLabel(month: string | null | undefined): string {
   return date.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
 }
 
+const IST_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+export function formatDayLabel(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "numeric",
+    year: "numeric",
+    timeZone: "Asia/Kolkata",
+  }).formatToParts(d);
+  const day = parts.find((p) => p.type === "day")?.value;
+  const month = Number(parts.find((p) => p.type === "month")?.value);
+  const year = parts.find((p) => p.type === "year")?.value;
+  if (!day || !month || !year) return "";
+  return `${day} ${IST_MONTHS[month - 1]} ${year}`;
+}
+
+export function formatDataAsOfLine(opts: {
+  holdingsMonth?: string | null;
+  returnsUpdated?: string | null;
+}): string {
+  const parts: string[] = [];
+  if (opts.holdingsMonth) parts.push(`Holdings: ${formatMonthLabel(opts.holdingsMonth)}`);
+  const returns = formatDayLabel(opts.returnsUpdated);
+  if (returns) parts.push(`Returns updated ${returns}`);
+  return parts.join(" · ");
+}
+
+/** Last calendar day of a YYYY-MM book, e.g. "31 Aug 2026". */
+export function formatMonthEnd(month: string | null | undefined): string {
+  if (!month || month.length < 7) return "";
+  const [ys, ms] = month.split("-");
+  const y = Number(ys);
+  const m = Number(ms);
+  if (!y || !m) return "";
+  const last = new Date(y, m, 0).getDate();
+  return `${last} ${IST_MONTHS[m - 1]} ${y}`;
+}
+
 export function formatMonthShort(month: string | null | undefined): string {
   if (!month || month.length < 7) return "—";
   const [y, m] = month.split("-");
@@ -60,7 +101,7 @@ export function normalizeSectorKey(sector: string | null | undefined): string {
 /** Empty / missing industry labels. Matches Sectors rollup. */
 export function sectorLabel(sector: string | null | undefined): string {
   const s = canonicalizeSector(sector || "");
-  return s || "Unknown";
+  return s || "Unclassified";
 }
 
 /**
@@ -88,7 +129,7 @@ export function formatNumber(n: number | null | undefined, digits = 2): string {
 /** Compact share count for home previews, e.g. +12.4M sh. */
 export function formatCompactShares(n: number | null | undefined): string {
   if (n === null || n === undefined || Number.isNaN(n)) return "—";
-  const sign = n > 0 ? "+" : n < 0 ? "-" : "";
+  const sign = n > 0 ? "+" : n < 0 ? "−" : "";
   const abs = Math.abs(n);
   const body =
     abs >= 1_000_000_000
@@ -103,8 +144,8 @@ export function formatCompactShares(n: number | null | undefined): string {
 
 export function formatDelta(n: number | null | undefined, digits = 2): string {
   if (n === null || n === undefined || Number.isNaN(n)) return "—";
-  const sign = n > 0 ? "+" : "";
-  return sign + formatNumber(n, digits);
+  const sign = n > 0 ? "+" : n < 0 ? "−" : "";
+  return sign + formatNumber(Math.abs(n), digits);
 }
 
 export function num(v: unknown): number {

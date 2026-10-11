@@ -1,24 +1,8 @@
+import { isEquityInstrument } from "@/lib/instruments";
 import type { ChaseRow } from "@/lib/types";
 
-const NAME_JUNK =
-  /\b(treps|reverse repo|cblo|tri[- ]party|cash equivalent|net (current assets|receivables?)|margin money|clearing|collateral|commercial paper|certificate of deposit|treasury bills?|t[- ]bills?|gilt|government securit|mutual fund units?|units of|preference shares?)\b/i;
-
-const NAME_EXACT = /^(others?|other (equity|equities|assets?|investments?)|cash|nca|ncd)$/i;
-
-const INDEX_OR_DERIV =
-  /\b(nifty(?:\s+\d+)?|sensex|finnifty|fin nifty|bank nifty|midcap nifty|next 50|s&p\s*bse|bse\s*sensex)\b/i;
-
-const INDEX_GENERIC = /\b(index|indices|etf|bees|futures?|options?)\b/i;
-
-const SECTOR_JUNK = /^(cash|debt|money market|cash equivalent|others?|index|indices|derivatives?)$/i;
-
 export function isJunkHolding(name: string, sector?: string | null): boolean {
-  const n = (name || "").trim();
-  if (!n || n === "Unknown") return true;
-  if (NAME_EXACT.test(n) || NAME_JUNK.test(n) || INDEX_OR_DERIV.test(n) || INDEX_GENERIC.test(n)) return true;
-  const s = (sector || "").trim();
-  if (s && SECTOR_JUNK.test(s)) return true;
-  return false;
+  return !isEquityInstrument({ display_name: name, sector });
 }
 
 export function cleanChaseRows(rows: ChaseRow[]): ChaseRow[] {

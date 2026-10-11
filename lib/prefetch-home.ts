@@ -35,7 +35,12 @@ export async function loadChaseIntoCache(month: string, force = false) {
       throw new Error(d.error || "Failed to load");
     }
     if (r.ok) {
-      putChase((d.month as string) || month, (d.rows || []) as ChaseRow[]);
+      const m = (d.month as string) || month;
+      putChase(m, (d.rows || []) as ChaseRow[]);
+      if (typeof d.excludedNoPriorMonth === "number") {
+        sessionCacheSet(`chase-excluded:${m}`, d.excludedNoPriorMonth);
+        sessionCacheSet("chase-excluded:", d.excludedNoPriorMonth);
+      }
     }
   }
 

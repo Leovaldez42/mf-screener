@@ -1,4 +1,5 @@
 import { getHoldingsCoverage } from "@/lib/cached-holdings";
+import { getDataFreshness } from "@/lib/data-freshness";
 import { listCompleteMonths } from "@/lib/holdings-month";
 import { HOLDINGS_CACHE_CONTROL, jsonCached, jsonNoStore } from "@/lib/http-cache";
 import { supabaseConfigured } from "@/lib/supabase";
@@ -14,7 +15,8 @@ export async function GET() {
     const latest = months[0];
     const coverage: Record<string, Awaited<ReturnType<typeof getHoldingsCoverage>>> = {};
     if (latest) coverage[latest] = await getHoldingsCoverage(latest);
-    return jsonCached({ months, coverage }, HOLDINGS_CACHE_CONTROL);
+    const freshness = await getDataFreshness();
+    return jsonCached({ months, coverage, ...freshness }, HOLDINGS_CACHE_CONTROL);
   } catch (e) {
     const message = e instanceof Error ? e.message : "months_failed";
     return jsonNoStore({ error: message }, 500);

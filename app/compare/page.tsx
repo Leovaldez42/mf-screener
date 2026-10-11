@@ -29,6 +29,9 @@ const METRIC_ROWS: { key: keyof SchemeMetric; label: string; digits?: number }[]
 
 function cell(s: SchemeMetric, key: keyof SchemeMetric, digits?: number) {
   if (key === "asset_class") return assetClassMeta(parseAssetClass(s.asset_class)).label;
+  if (key === "cagr_inception" && s.inception_cagr_reliable === false) {
+    return <span title="Vendor value looks wrong, hidden">—</span>;
+  }
   const v = s[key];
   if (typeof v === "number") return formatNumber(v, digits ?? 2);
   if (typeof v === "string" && v) return v;
@@ -100,7 +103,17 @@ function CompareInner() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-medium">Compare funds</h1>
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h1 className="text-xl font-medium">Compare funds</h1>
+          {codes.length >= 2 ? (
+            <Link
+              className="text-sm text-muted underline hover:text-foreground"
+              href={`/overlap?funds=${codes.slice(0, 3).join(",")}`}
+            >
+              Overlap
+            </Link>
+          ) : null}
+        </div>
         <p className="text-sm text-muted">
           Search and add up to {COMPARE_MAX} Direct Growth schemes — any class. PE is blank where it does not
           apply. Open a fund from the{" "}

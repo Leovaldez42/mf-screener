@@ -1,4 +1,5 @@
 import { unstable_cache } from "next/cache";
+import { withInceptionCagrFlag } from "@/lib/inception-cagr";
 import { equalWeightCategoryAverages, type SchemeMetric } from "@/lib/scheme-metrics";
 import {
   CLASS_STYLES,
@@ -36,7 +37,7 @@ async function loadScreenerUniverse() {
   };
 }
 
-export const getScreenerUniverse = unstable_cache(loadScreenerUniverse, ["screener-universe-all"], {
+export const getScreenerUniverse = unstable_cache(loadScreenerUniverse, ["screener-universe-cagr-v2"], {
   revalidate: METRICS_REVALIDATE_SEC,
   tags: [CACHE_TAG_METRICS],
 });
@@ -76,7 +77,7 @@ async function loadSchemePage(code: string) {
   if (error) throw new Error(error.message);
   if (!data) return { error: "not_found" as const };
 
-  const scheme = data as SchemeMetric;
+  const scheme = withInceptionCagrFlag(data as SchemeMetric);
   const category = String(scheme.category || "");
   const assetClass = parseAssetClass(scheme.asset_class);
   let categoryAverage = null;
@@ -96,7 +97,7 @@ async function loadSchemePage(code: string) {
   return { scheme, categoryAverage };
 }
 
-export const getSchemePage = unstable_cache(loadSchemePage, ["scheme-page"], {
+export const getSchemePage = unstable_cache(loadSchemePage, ["scheme-page-cagr-v2"], {
   revalidate: METRICS_REVALIDATE_SEC,
   tags: [CACHE_TAG_METRICS],
 });

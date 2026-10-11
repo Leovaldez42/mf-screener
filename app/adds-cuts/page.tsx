@@ -1,12 +1,17 @@
 "use client";
 
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { ChaseTable, type SortKey } from "@/components/chase-table";
 import { LoadError, SummaryCardSkeleton, TableSkeleton } from "@/components/load-ui";
-import { loadWatchlist, saveWatchlist } from "@/components/ui";
+import { SectorPill } from "@/components/sector-pill";
+import { UnavailableMonthNote, loadWatchlist, saveWatchlist, useHoldingsMonths } from "@/components/ui";
 import { formatNumber, sectorLabel } from "@/lib/format";
-import { loadMonths, peekCoverage, peekMonths } from "@/lib/load-months";
+import { excludedNoPriorLabel } from "@/lib/mom-universe";
+import { pageHoldingsMonth } from "@/lib/holdings-month-pick";
+import { isEquityInstrument, NON_EQUITY_SECTORS } from "@/lib/instruments";
+import { loadMonths, peekCoverage } from "@/lib/load-months";
 import { chaseLooksComplete, loadChaseIntoCache } from "@/lib/prefetch-home";
 import {
   chaseCacheKey,
@@ -51,7 +56,11 @@ function ChaseFallback() {
         <p className="mt-1 text-sm text-muted">
           Active equity funds only. Adds and cuts use share quantity, not weight. Use{" "}
           <strong>Holdings as of</strong> in the header. Books lag month-end by about ten working
-          days. Click a column header to sort.
+          days. Click a column header to sort. For the narrative cut, see{" "}
+          <Link href="/reports" className="text-accent hover:underline">
+            this month&apos;s report
+          </Link>
+          .
         </p>
       </div>
       <div className="grid gap-2 sm:grid-cols-3">
@@ -66,8 +75,16 @@ function ChaseFallback() {
 
 function ChasePage() {
   const search = useSearchParams();
-  const month = search.get("month") || peekMonths()[0] || "";
+  const requested = search.get("month") || "";
+  const availableMonths = useHoldingsMonths();
+  const waitingMonths = Boolean(requested && availableMonths.length === 0);
+  const month = waitingMonths ? "" : pageHoldingsMonth(requested, availableMonths).month;
   const allRows = useCachedChase(month);
+  const excludedNoPrior = useSyncExternalStore(
+    sessionCacheSubscribe,
+    () => sessionCacheGet<number>(`chase-excluded:${month}`) ?? sessionCacheGet<number>("chase-excluded:") ?? 0,
+    () => 0,
+  );
   const [error, setError] = useState<string | null>(null);
   const [sector, setSector] = useState("");
   const [minFunds, setMinFunds] = useState("");
@@ -88,8 +105,9 @@ function ChasePage() {
   useEffect(() => {
     loadMonths()
       .then((months) => {
-        const latest = months[0] || peekMonths()[0];
-        if (!month || !latest || month !== latest) {
+        const latest = months[0];
+        const effective = pageHoldingsMonth(requested, months).month;
+        if (!effective || !latest || effective !== latest) {
           setCoveragePct(null);
           return;
         }
@@ -97,7 +115,7 @@ function ChasePage() {
         setCoveragePct(c && c.total > 0 ? c.pct : null);
       })
       .catch(() => setCoveragePct(null));
-  }, [month]);
+  }, [requested, month]);
 
   useEffect(() => {
     function onScroll() {
@@ -109,6 +127,7 @@ function ChasePage() {
   }, []);
 
   useEffect(() => {
+    if (waitingMonths) return;
     const hit = reload === 0 ? sessionCacheGet<ChaseRow[]>(chaseCacheKey(month)) : undefined;
     if (hit?.length) {
       queueMicrotask(() => {
@@ -137,11 +156,12 @@ function ChasePage() {
     return () => {
       cancelled = true;
     };
-  }, [month, reload]);
+  }, [month, reload, waitingMonths]);
 
   const rows = useMemo(() => {
     const min = Number(minFunds) || 0;
     return allRows.filter((r) => {
+      if (!isEquityInstrument(r)) return false;
       if (sector && sectorLabel(r.sector).toLowerCase() !== sector.toLowerCase()) return false;
       if (min > 0 && r.fund_count < min) return false;
       return true;
@@ -157,7 +177,12 @@ function ChasePage() {
   }, [rows, stockQ]);
 
   const sectors = useMemo(
-    () => [...new Set(allRows.map((r) => sectorLabel(r.sector)))].sort((a, b) => a.localeCompare(b, "en-IN")),
+    () =>
+      [
+        ...new Set(
+          allRows.filter(isEquityInstrument).map((r) => sectorLabel(r.sector)).filter((s) => !NON_EQUITY_SECTORS.has(s.toLowerCase())),
+        ),
+      ].sort((a, b) => a.localeCompare(b, "en-IN")),
     [allRows]
   );
 
@@ -224,8 +249,18 @@ function ChasePage() {
         <p className="mt-1 text-sm text-muted">
           Active equity funds only. Adds and cuts use share quantity, not weight. Use{" "}
           <strong>Holdings as of</strong> in the header. Books lag month-end by about ten working
-          days. Click a column header to sort.
+          days. Click a column header to sort. For the narrative cut, see{" "}
+          <Link href={month ? `/reports/${month}` : "/reports"} className="text-accent hover:underline">
+            this month&apos;s report
+          </Link>
+          .
         </p>
+        {excludedNoPriorLabel(excludedNoPrior) ? (
+          <p className="mt-2 text-xs text-faint">{excludedNoPriorLabel(excludedNoPrior)}</p>
+        ) : null}
+        <div className="mt-2">
+          <UnavailableMonthNote requested={requested} showing={month} />
+        </div>
       </div>
       {coverageWarn ? (
         <div className="rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground">
@@ -249,7 +284,7 @@ function ChasePage() {
                 {summary.inflow ? summary.inflow.display_name : "—"}
                 {summary.inflow ? (
                   <span className="ml-2 font-normal text-gain">
-                    +{formatNumber(summary.inflow.net_value_delta_cr, 1)} ₹ cr
+                    ▲ +{formatNumber(summary.inflow.net_value_delta_cr, 1)} ₹ cr
                   </span>
                 ) : (
                   <span className="ml-2 font-normal text-muted">No positive movers</span>
@@ -263,7 +298,7 @@ function ChasePage() {
                 {summary.outflow ? summary.outflow.display_name : "—"}
                 {summary.outflow ? (
                   <span className="ml-2 font-normal text-loss">
-                    {formatNumber(summary.outflow.net_value_delta_cr, 1)} ₹ cr
+                    ▼ −{formatNumber(Math.abs(summary.outflow.net_value_delta_cr), 1)} ₹ cr
                   </span>
                 ) : (
                   <span className="ml-2 font-normal text-muted">No negative movers</span>
@@ -274,14 +309,16 @@ function ChasePage() {
             <div className="rounded-lg border border-border bg-card px-3 py-2">
               <div className="text-xs uppercase tracking-[0.12em] text-faint">Sector signal</div>
               <div className="mt-1 truncate text-sm font-medium text-foreground">
-                {summary.leadingSector ? summary.leadingSector.name : "—"}
                 {summary.leadingSector ? (
-                  <span className="ml-2 font-normal text-muted">
-                    {summary.leadingSector.value > 0 ? "Net inflow" : "Net outflow"}{" "}
-                    {formatNumber(Math.abs(summary.leadingSector.value), 1)} ₹ cr
-                  </span>
+                  <>
+                    <SectorPill sector={summary.leadingSector.name} />
+                    <span className="ml-2 font-normal text-muted">
+                      {summary.leadingSector.value > 0 ? "▲ Net inflow" : "▼ Net outflow"}{" "}
+                      {formatNumber(Math.abs(summary.leadingSector.value), 1)} ₹ cr
+                    </span>
+                  </>
                 ) : (
-                  <span className="ml-2 font-normal text-muted">No sector signal</span>
+                  <span className="font-normal text-muted">No sector signal</span>
                 )}
               </div>
             </div>
@@ -298,7 +335,7 @@ function ChasePage() {
             onChange={(e) => setSector(e.target.value)}
           >
             <option value="">All sectors</option>
-            {sectors.filter((s) => s !== "Unknown").map((s) => (
+            {sectors.map((s) => (
               <option key={s} value={s}>
                 {s}
               </option>

@@ -13,6 +13,7 @@ import {
   type ClassTabId,
 } from "@/lib/fund-class";
 import { type CategoryAverage, type SchemeMetric, type SortKey } from "@/lib/scheme-metrics";
+import { DataAsOfNote } from "@/components/ui";
 import { formatNumber } from "@/lib/format";
 
 type TableCol = { key: SortKey; label: string; hide: string };
@@ -75,6 +76,8 @@ export default function ScreenerPage() {
   const [maxAum, setMaxAum] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("sharpe_3y");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [showAll, setShowAll] = useState(false);
+  const [hiddenCount, setHiddenCount] = useState(0);
   const hasRows = useRef(false);
   const browseAll = assetClass === "all";
   const showPe = browseAll || classShowsPe(assetClass);
@@ -110,6 +113,7 @@ export default function ScreenerPage() {
     p.set("sort", sortKey);
     p.set("order", sortOrder);
     p.set("limit", "600");
+    if (showAll) p.set("showAll", "1");
     return p.toString();
   }, [
     assetClass,
@@ -126,6 +130,7 @@ export default function ScreenerPage() {
     maxAum,
     sortKey,
     sortOrder,
+    showAll,
   ]);
 
   useEffect(() => {
@@ -147,6 +152,7 @@ export default function ScreenerPage() {
           setStyles(d.styles || []);
           setStyleAverage(d.styleAverage || null);
           setUniverse(typeof d.universe === "number" ? d.universe : null);
+          setHiddenCount(typeof d.hiddenCount === "number" ? d.hiddenCount : 0);
         })
         .catch(() => {
           if (!hasRows.current) setError("Could not load schemes");
@@ -190,13 +196,23 @@ export default function ScreenerPage() {
     }
     if (key === "aum_cr") return formatNumber(s.aum_cr, 0);
     if (key === "fund_house") return s.fund_house;
+    if (key === "cagr_inception" && s.inception_cagr_reliable === false) {
+      return (
+        <span title="Vendor value looks wrong, hidden">—</span>
+      );
+    }
     return formatNumber(s[key as NumericCol]);
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
-        <h1 className="text-xl font-medium">Fund screener</h1>
+        <div>
+          <h1 className="text-xl font-medium">Fund screener</h1>
+          <div className="mt-1">
+            <DataAsOfNote variant="returns" />
+          </div>
+        </div>
         {updating ? <UpdatingNote /> : null}
       </div>
 
@@ -317,12 +333,23 @@ export default function ScreenerPage() {
               setMaxAum={setMaxAum}
             />
           </div>
-          {!searching && universe != null ? (
-            <p className="text-xs text-faint">
-              {schemes.length} of {Math.max(universe, schemes.length)}
-              {browseAll ? "" : ` ${classLabel.toLowerCase()}`} schemes
-            </p>
-          ) : null}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-faint">
+            {!searching && universe != null ? (
+              <p>
+                {schemes.length} of {Math.max(universe, schemes.length)}
+                {browseAll ? "" : ` ${classLabel.toLowerCase()}`} schemes
+              </p>
+            ) : null}
+            <label className="inline-flex items-center gap-1.5 text-muted">
+              <input
+                type="checkbox"
+                checked={showAll}
+                onChange={(e) => setShowAll(e.target.checked)}
+              />
+              Show all plans
+            </label>
+            {hiddenCount > 0 ? <span>{hiddenCount} hidden</span> : null}
+          </div>
 
       {error ? (
         <LoadError

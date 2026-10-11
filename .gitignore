@@ -19,10 +19,11 @@
 
 # production
 /build
-
+/docs
 # misc
 .DS_Store
 *.pem
+.local-shots/
 
 # debug
 npm-debug.log*
