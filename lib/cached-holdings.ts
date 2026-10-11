@@ -1,120 +1,120 @@
 import { unstable_cache } from "next/cache";
-import { listCompleteMonths, listFamilyMonths } from "@/lib/holdings-month";
-import { CACHE_TAG_HOLDINGS, HOLDINGS_REVALIDATE_SEC } from "@/lib/http-cache";
+import { computeCanonicalBook, type SnapshotLine } from "@/lib/canonical-holdings";
+import { listCompleteMonths, listFamilyMonths, previousMonth } from "@/lib/holdings-month";
+import { pickHoldingsMonth } from "@/lib/holdings-month-pick";
+import { CACHE_TAG_HOLDINGS, CACHE_TAG_METRICS, HOLDINGS_REVALIDATE_SEC } from "@/lib/http-cache";
 import { asOne } from "@/lib/rel";
 import { createAnonClient, fetchAllRows } from "@/lib/supabase";
-import { isJunkHolding } from "@/lib/chase-clean";
+import {
+  instrumentSectorLabel,
+  isCashLikeNonEquity,
+  isEquityInstrument,
+  nonEquityPattern,
+  stripDuplicateMarkers,
+} from "@/lib/instruments";
 import type { ChaseRow } from "@/lib/types";
 
-type AggRow = {
-  stock_id: string;
-  fund_count: number;
-  fund_count_delta: number;
-  net_qty_delta: number;
-  net_value_delta_cr: number;
-  median_weight_pct: number | null;
-  stocks: unknown;
-};
-
-async function loadChaseRows(month: string): Promise<ChaseRow[]> {
+async function loadMonthSnapshots(month: string): Promise<SnapshotLine[]> {
   const db = createAnonClient();
-  const data = await fetchAllRows<AggRow>(() =>
+  const rows = await fetchAllRows<{
+    family_id: number;
+    stock_id: string;
+    quantity: number;
+    market_value_cr: number;
+    weight_pct: number;
+    stocks: unknown;
+  }>(() =>
     db
-      .from("stock_month_aggregates")
-      .select(
-        "stock_id, fund_count, fund_count_delta, net_qty_delta, net_value_delta_cr, median_weight_pct, stocks(display_name, sector)",
-      )
+      .from("holdings_snapshots")
+      .select("family_id, stock_id, quantity, market_value_cr, weight_pct, stocks(display_name, sector, isin)")
       .eq("month", month),
   );
-  return data.map(aggToChaseRow);
-}
-
-function aggToChaseRow(r: AggRow): ChaseRow {
-  const stock = asOne(r.stocks);
-  return {
-    stock_id: r.stock_id as string,
-    display_name: String(stock?.display_name ?? "Unknown"),
-    sector: (stock?.sector as string | null) ?? null,
-    fund_count: Number(r.fund_count),
-    fund_count_delta: Number(r.fund_count_delta),
-    net_qty_delta: Number(r.net_qty_delta),
-    net_value_delta_cr: Number(r.net_value_delta_cr),
-    median_weight_pct: r.median_weight_pct == null ? null : Number(r.median_weight_pct),
-  };
-}
-
-const PREVIEW_SELECT =
-  "stock_id, fund_count, fund_count_delta, net_qty_delta, net_value_delta_cr, median_weight_pct, stocks(display_name, sector)";
-const PREVIEW_POOL = 40;
-
-function takeEquityPreview(rows: AggRow[] | null, n: number): ChaseRow[] {
-  const out: ChaseRow[] = [];
-  for (const raw of rows || []) {
-    const row = aggToChaseRow(raw);
-    if (isJunkHolding(row.display_name, row.sector)) continue;
-    out.push(row);
-    if (out.length >= n) break;
+  const out: SnapshotLine[] = [];
+  for (const row of rows) {
+    const st = asOne(row.stocks);
+    const line: SnapshotLine = {
+      family_id: Number(row.family_id),
+      stock_id: row.stock_id,
+      display_name: String(st?.display_name ?? ""),
+      sector: (st?.sector as string | null) ?? null,
+      isin: (st?.isin as string | null) ?? null,
+      quantity: Number(row.quantity),
+      market_value_cr: Number(row.market_value_cr),
+      weight_pct: Number(row.weight_pct),
+    };
+    if (!isEquityInstrument(line)) continue;
+    out.push(line);
   }
   return out;
 }
 
-async function loadChasePreview(month: string): Promise<{ inflows: ChaseRow[]; outflows: ChaseRow[] }> {
-  const db = createAnonClient();
-  const [up, down] = await Promise.all([
-    db
-      .from("stock_month_aggregates")
-      .select(PREVIEW_SELECT)
-      .eq("month", month)
-      .gt("net_value_delta_cr", 0)
-      .order("net_value_delta_cr", { ascending: false })
-      .limit(PREVIEW_POOL),
-    db
-      .from("stock_month_aggregates")
-      .select(PREVIEW_SELECT)
-      .eq("month", month)
-      .lt("net_value_delta_cr", 0)
-      .order("net_value_delta_cr", { ascending: true })
-      .limit(PREVIEW_POOL),
+async function loadCanonicalBook(month: string) {
+  const [current, prior] = await Promise.all([
+    loadMonthSnapshots(month),
+    loadMonthSnapshots(previousMonth(month)),
   ]);
-  if (up.error) throw new Error(up.error.message);
-  if (down.error) throw new Error(down.error.message);
-  return {
-    inflows: takeEquityPreview((up.data || []) as AggRow[], 3),
-    outflows: takeEquityPreview((down.data || []) as AggRow[], 3),
-  };
+  return computeCanonicalBook(month, current, prior);
 }
 
-export const getChasePreview = unstable_cache(loadChasePreview, ["chase-preview", "equity-only"], {
+/** Full books are ~15MB; Next's data cache rejects items over 2MB. Coalesce in-flight loads only. */
+const inflightBooks = new Map<string, ReturnType<typeof loadCanonicalBook>>();
+
+export function getCanonicalBook(month: string) {
+  const hit = inflightBooks.get(month);
+  if (hit) return hit;
+  const pending = loadCanonicalBook(month).finally(() => {
+    inflightBooks.delete(month);
+  });
+  inflightBooks.set(month, pending);
+  return pending;
+}
+
+async function loadChaseRows(month: string): Promise<ChaseRow[]> {
+  return (await getCanonicalBook(month)).chase;
+}
+
+export const getChaseRows = unstable_cache(loadChaseRows, ["chase-rows-equity-v7"], {
   revalidate: HOLDINGS_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS],
 });
 
-export const getChaseRows = unstable_cache(loadChaseRows, ["chase-rows"], {
+async function loadChasePreview(month: string): Promise<{ inflows: ChaseRow[]; outflows: ChaseRow[] }> {
+  const rows = await getChaseRows(month);
+  const inflows = [...rows]
+    .filter((r) => r.net_value_delta_cr > 0)
+    .sort((a, b) => b.net_value_delta_cr - a.net_value_delta_cr)
+    .slice(0, 3);
+  const outflows = [...rows]
+    .filter((r) => r.net_value_delta_cr < 0)
+    .sort((a, b) => a.net_value_delta_cr - b.net_value_delta_cr)
+    .slice(0, 3);
+  return { inflows, outflows };
+}
+
+export const getChasePreview = unstable_cache(loadChasePreview, ["chase-preview", "equity-v7"], {
   revalidate: HOLDINGS_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS],
 });
 
 async function loadSectorRows(month: string) {
-  const db = createAnonClient();
-  type DiffRow = { value_delta_cr: number; qty_delta: number; stocks: unknown };
-  const data = await fetchAllRows<DiffRow>(() =>
-    db.from("holding_diffs").select("value_delta_cr, qty_delta, stocks(sector)").eq("month", month),
-  );
+  const book = await getCanonicalBook(month);
   const map = new Map<string, { net_value_delta_cr: number; net_qty_delta: number }>();
-  for (const row of data) {
-    const st = asOne(row.stocks);
-    const key = String(st?.sector || "Unknown");
+  for (const d of book.deltas) {
+    const key = instrumentSectorLabel(d) || "Unclassified";
     const cur = map.get(key) || { net_value_delta_cr: 0, net_qty_delta: 0 };
-    cur.net_value_delta_cr += Number(row.value_delta_cr);
-    cur.net_qty_delta += Number(row.qty_delta);
+    cur.net_value_delta_cr += d.value_delta_cr;
+    cur.net_qty_delta += d.qty_delta;
     map.set(key, cur);
   }
-  return [...map.entries()]
-    .map(([sector, v]) => ({ sector, ...v }))
-    .sort((a, b) => Math.abs(b.net_value_delta_cr) - Math.abs(a.net_value_delta_cr));
+  return {
+    excludedNoPriorMonth: book.excludedNoPriorMonth,
+    rows: [...map.entries()]
+      .map(([sector, v]) => ({ sector, ...v }))
+      .sort((a, b) => Math.abs(b.net_value_delta_cr) - Math.abs(a.net_value_delta_cr)),
+  };
 }
 
-export const getSectorRows = unstable_cache(loadSectorRows, ["sector-rows"], {
+export const getSectorRows = unstable_cache(loadSectorRows, ["sector-rows-equity-v7"], {
   revalidate: HOLDINGS_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS],
 });
@@ -157,26 +157,56 @@ export async function resolveHoldingsMonth(requested: string | null): Promise<st
   return complete[0] ?? null;
 }
 
+export async function requireHoldingsMonth(requested: string | null): Promise<
+  | { ok: true; month: string; availableMonths: string[] }
+  | { ok: false; unknown: boolean; availableMonths: string[] }
+> {
+  const availableMonths = await listCompleteMonths();
+  const picked = pickHoldingsMonth(requested, availableMonths);
+  if (picked.unknown) return { ok: false, unknown: true, availableMonths };
+  if (!picked.month) return { ok: false, unknown: false, availableMonths };
+  return { ok: true, month: picked.month, availableMonths };
+}
+
+const STOCK_UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isInvalidUuidError(message: string): boolean {
+  return /invalid input syntax for type uuid/i.test(message);
+}
+
 async function loadStockPayload(id: string, requestedMonth: string) {
+  if (!STOCK_UUID.test(id)) return { error: "not_found" as const };
   const db = createAnonClient();
-  const { data: stock, error: sErr } = await db.from("stocks").select("*").eq("id", id).maybeSingle();
-  if (sErr) throw new Error(sErr.message);
-  if (!stock) return { error: "not_found" as const };
+  const { data: stockRow, error: sErr } = await db.from("stocks").select("*").eq("id", id).maybeSingle();
+  if (sErr) {
+    if (isInvalidUuidError(sErr.message)) return { error: "not_found" as const };
+    throw new Error(sErr.message);
+  }
+  if (!stockRow) return { error: "not_found" as const };
+  const stock = {
+    ...stockRow,
+    display_name: stripDuplicateMarkers(String(stockRow.display_name ?? "")),
+    sector: instrumentSectorLabel({
+      display_name: String(stockRow.display_name ?? ""),
+      sector: (stockRow.sector as string | null) ?? null,
+      isin: (stockRow.isin as string | null) ?? null,
+    }),
+  };
 
   const complete = await listCompleteMonths();
-  const history = (
-    await Promise.all(
-      complete.map(async (m) => {
-        const { count, error } = await db
-          .from("holdings_snapshots")
-          .select("family_id", { count: "exact", head: true })
-          .eq("stock_id", id)
-          .eq("month", m);
-        if (error) throw new Error(error.message);
-        return { month: m, fund_count: count ?? 0, fund_count_delta: 0 };
-      }),
-    )
-  ).filter((h) => h.fund_count > 0);
+  const books = await Promise.all(complete.map((m) => getCanonicalBook(m)));
+  const history = books
+    .map((book, i) => {
+      const canonicalId = book.aliasToCanonical[id] || id;
+      const row = book.chase.find((r) => r.stock_id === canonicalId);
+      return {
+        month: complete[i],
+        fund_count: row?.fund_count ?? 0,
+        fund_count_delta: row?.fund_count_delta ?? 0,
+      };
+    })
+    .filter((h) => h.fund_count > 0);
 
   const monthToUse =
     requestedMonth && complete.includes(requestedMonth) ? requestedMonth : history[0]?.month;
@@ -184,80 +214,58 @@ async function loadStockPayload(id: string, requestedMonth: string) {
     return { stock, month: null, history: [], holders: [], summary: null };
   }
 
-  type DiffRow = {
-    family_id: number;
-    qty_delta: number;
-    weight_delta: number;
-    value_delta_cr: number;
-    event: string;
-    families: unknown;
-  };
-  type SnapRow = { family_id: number; quantity: number; market_value_cr: number; weight_pct: number };
-
-  const diffs = await fetchAllRows<DiffRow>(() =>
-    db
-      .from("holding_diffs")
-      .select("family_id, qty_delta, weight_delta, value_delta_cr, event, families(id, name, amc_slug, sebi_category)")
-      .eq("stock_id", id)
-      .eq("month", monthToUse),
-  );
-  const snaps = await fetchAllRows<SnapRow>(() =>
-    db
-      .from("holdings_snapshots")
-      .select("family_id, quantity, market_value_cr, weight_pct")
-      .eq("stock_id", id)
-      .eq("month", monthToUse),
-  );
-
-  const snapByFamily = new Map(snaps.map((s) => [s.family_id, s]));
-  const diffByFamily = new Map(diffs.map((d) => [d.family_id, d]));
-  const familyIds = new Set([...snapByFamily.keys(), ...diffByFamily.keys()]);
-
-  const { data: familyRows } = familyIds.size
-    ? await db
-        .from("families")
-        .select("id, name, amc_slug, sebi_category")
-        .in("id", [...familyIds])
+  const book = books[complete.indexOf(monthToUse)] || (await getCanonicalBook(monthToUse));
+  const canonicalId = book.aliasToCanonical[id] || id;
+  const meta = book.stocks[canonicalId];
+  if (meta) {
+    stock.display_name = meta.display_name;
+    stock.sector = instrumentSectorLabel(meta);
+  }
+  const chaseRow = book.chase.find((r) => r.stock_id === canonicalId);
+  const stockDeltas = book.deltas.filter((d) => d.stock_id === canonicalId);
+  const familyIds = [...new Set(stockDeltas.map((d) => d.family_id))];
+  const { data: familyRows } = familyIds.length
+    ? await db.from("families").select("id, name, amc_slug, sebi_category").in("id", familyIds)
     : { data: [] as { id: number; name: string; amc_slug: string; sebi_category: string }[] };
   const familyById = new Map((familyRows || []).map((f) => [f.id as number, f]));
 
-  const holders = [...familyIds]
-    .map((familyId) => {
-      const snap = snapByFamily.get(familyId);
-      const diff = diffByFamily.get(familyId);
-      const fam = asOne(diff?.families) || familyById.get(familyId);
+  const holders = stockDeltas
+    .filter((d) => d.qty > 0 || d.event === "exit" || d.qty_delta !== 0)
+    .map((d) => {
+      const fam = familyById.get(d.family_id);
       return {
-        family_id: familyId,
+        family_id: d.family_id,
         family_name: String(fam?.name ?? "Unknown fund"),
         amc_slug: fam?.amc_slug as string | undefined,
         sebi_category: fam?.sebi_category as string | undefined,
-        quantity: snap ? Number(snap.quantity) : 0,
-        weight_pct: snap ? Number(snap.weight_pct) : 0,
-        market_value_cr: snap ? Number(snap.market_value_cr) : 0,
-        qty_delta: diff ? Number(diff.qty_delta) : 0,
-        weight_delta: diff ? Number(diff.weight_delta) : 0,
-        event: diff?.event || "hold",
+        quantity: d.qty,
+        weight_pct: d.weight_pct,
+        market_value_cr: d.value_cr,
+        qty_delta: d.qty_delta,
+        weight_delta: d.weight_delta,
+        event: d.event,
       };
     })
     .sort((a, b) => b.quantity - a.quantity || Math.abs(b.qty_delta) - Math.abs(a.qty_delta));
 
-  const { data: agg } = await db
-    .from("stock_month_aggregates")
-    .select("fund_count, fund_count_delta, net_qty_delta, net_value_delta_cr")
-    .eq("stock_id", id)
-    .eq("month", monthToUse)
-    .maybeSingle();
-  const summary = {
-    fund_count: agg ? Number(agg.fund_count) : holders.filter((h) => h.quantity > 0).length,
-    fund_count_delta: agg ? Number(agg.fund_count_delta) : 0,
-    net_qty_delta: agg ? Number(agg.net_qty_delta) : 0,
-    net_value_delta_cr: agg ? Number(agg.net_value_delta_cr) : 0,
-  };
+  const summary = chaseRow
+    ? {
+        fund_count: chaseRow.fund_count,
+        fund_count_delta: chaseRow.fund_count_delta,
+        net_qty_delta: chaseRow.net_qty_delta,
+        net_value_delta_cr: chaseRow.net_value_delta_cr,
+      }
+    : {
+        fund_count: holders.filter((h) => h.quantity > 0).length,
+        fund_count_delta: 0,
+        net_qty_delta: 0,
+        net_value_delta_cr: 0,
+      };
 
   return { stock, month: monthToUse, history, holders, summary };
 }
 
-export const getStockPayload = unstable_cache(loadStockPayload, ["stock-payload"], {
+export const getStockPayload = unstable_cache(loadStockPayload, ["stock-payload-v7"], {
   revalidate: HOLDINGS_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS],
 });
@@ -267,58 +275,61 @@ async function loadFundPayload(familyId: number, requestedMonth: string) {
   const { data: family, error } = await db.from("families").select("*").eq("id", familyId).maybeSingle();
   if (error) throw new Error(error.message);
   if (!family) {
-    return {
-      error: "no_holdings" as const,
-      message: "Adds & cuts books are only for active-equity schemes.",
-    };
+    return { error: "not_found" as const };
   }
 
   const complete = await listCompleteMonths();
   const availableMonths = await listFamilyMonths(db, familyId, complete);
-  const monthToUse =
-    requestedMonth && availableMonths.includes(requestedMonth)
-      ? requestedMonth
-      : availableMonths[0] || null;
+  if (requestedMonth) {
+    if (!availableMonths.includes(requestedMonth)) {
+      return { error: "unknown_month" as const, availableMonths };
+    }
+  }
+  const monthToUse = requestedMonth || availableMonths[0] || null;
   if (!monthToUse) {
-    return { family, month: null, holdings: [], sectors: [], availableMonths, error: null, empty: true };
+    const { data: metric } = await db
+      .from("scheme_metrics")
+      .select("aum_cr")
+      .eq("scheme_code", String(familyId))
+      .maybeSingle();
+    return {
+      family,
+      aum_cr: metric?.aum_cr == null ? null : Number(metric.aum_cr),
+      month: null,
+      holdings: [],
+      sectors: [],
+      availableMonths,
+      error: null,
+      empty: true,
+    };
   }
 
-  const { data: snaps } = await db
-    .from("holdings_snapshots")
-    .select("stock_id, quantity, market_value_cr, weight_pct, stocks(display_name, sector)")
-    .eq("family_id", familyId)
-    .eq("month", monthToUse)
-    .limit(2000);
-
-  const { data: diffs } = await db
-    .from("holding_diffs")
-    .select("stock_id, qty_delta, weight_delta, event")
-    .eq("family_id", familyId)
-    .eq("month", monthToUse);
-
-  const diffBy = new Map((diffs || []).map((d) => [d.stock_id as string, d]));
-
-  const holdings = (snaps || [])
-    .map((s) => {
-      const st = asOne(s.stocks);
-      const d = diffBy.get(s.stock_id as string);
-      return {
-        stock_id: s.stock_id,
-        display_name: String(st?.display_name ?? "Unknown"),
-        sector: (st?.sector as string | null) ?? null,
-        quantity: Number(s.quantity),
-        market_value_cr: Number(s.market_value_cr),
-        weight_pct: Number(s.weight_pct),
-        qty_delta: d ? Number(d.qty_delta) : 0,
-        weight_delta: d ? Number(d.weight_delta) : 0,
-        event: d?.event ?? "hold",
-      };
-    })
+  const [{ data: metric }, book] = await Promise.all([
+    db.from("scheme_metrics").select("aum_cr").eq("scheme_code", String(familyId)).maybeSingle(),
+    getCanonicalBook(monthToUse),
+  ]);
+  const aum_cr = metric?.aum_cr == null ? null : Number(metric.aum_cr);
+  const holdings = book.deltas
+    .filter((d) => d.family_id === familyId && d.qty > 0)
+    .map((d) => ({
+      stock_id: d.stock_id,
+      display_name: stripDuplicateMarkers(d.display_name || "Unknown"),
+      sector: d.sector,
+      isin: d.isin,
+      quantity: d.qty,
+      market_value_cr: d.value_cr,
+      weight_pct: d.weight_pct,
+      qty_delta: d.qty_delta,
+      weight_delta: d.weight_delta,
+      event: d.event,
+    }))
     .sort((a, b) => b.weight_pct - a.weight_pct);
 
   const sectorMap = new Map<string, { weight: number; value: number }>();
   for (const h of holdings) {
-    const key = h.sector || "Unknown";
+    const p = nonEquityPattern(h);
+    if (p && isCashLikeNonEquity(h)) continue;
+    const key = p ? "Other instruments" : instrumentSectorLabel(h);
     const cur = sectorMap.get(key) || { weight: 0, value: 0 };
     cur.weight += h.weight_pct;
     cur.value += h.market_value_cr;
@@ -328,10 +339,10 @@ async function loadFundPayload(familyId: number, requestedMonth: string) {
     .map(([name, v]) => ({ name, weight_pct: v.weight, market_value_cr: v.value }))
     .sort((a, b) => b.weight_pct - a.weight_pct);
 
-  return { family, month: monthToUse, holdings, sectors, availableMonths };
+  return { family, aum_cr, month: monthToUse, holdings, sectors, availableMonths };
 }
 
-export const getFundPayload = unstable_cache(loadFundPayload, ["fund-payload"], {
+export const getFundPayload = unstable_cache(loadFundPayload, ["fund-payload-equity-v7"], {
   revalidate: HOLDINGS_REVALIDATE_SEC,
-  tags: [CACHE_TAG_HOLDINGS],
+  tags: [CACHE_TAG_HOLDINGS, CACHE_TAG_METRICS],
 });

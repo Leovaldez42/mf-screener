@@ -2,6 +2,9 @@ import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import Script from "next/script";
 import { Shell } from "@/components/ui";
+import { getDataFreshness } from "@/lib/data-freshness";
+import { listCompleteMonths } from "@/lib/holdings-month";
+import { supabaseConfigured } from "@/lib/supabase";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -31,16 +34,25 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  let freshness = null;
+  let months: string[] = [];
+  if (supabaseConfigured()) {
+    try {
+      [freshness, months] = await Promise.all([getDataFreshness(), listCompleteMonths()]);
+    } catch (err) {
+      console.error("layout freshness failed", err);
+    }
+  }
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} font-sans antialiased bg-background text-foreground`}>
         <Script id="mf-chase-theme" strategy="beforeInteractive">
-          {`(function(){try{var t=localStorage.getItem("mf-chase-theme");var dark=t!=="light";if(dark)document.documentElement.classList.add("dark");else document.documentElement.classList.remove("dark");}catch(e){document.documentElement.classList.add("dark");}})();`}
+          {`(function(){try{var t=localStorage.getItem("mf-chase-theme");var dark=t==="dark"||(t!=="light"&&window.matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",dark);}catch(e){try{document.documentElement.classList.toggle("dark",window.matchMedia("(prefers-color-scheme: dark)").matches);}catch(e2){}}})();`}
         </Script>
         {process.env.NODE_ENV === "production" ? (
           <Script
@@ -49,7 +61,7 @@ export default function RootLayout({
             strategy="lazyOnload"
           />
         ) : null}
-        <Shell>{children}</Shell>
+        <Shell freshness={freshness} months={months}>{children}</Shell>
       </body>
     </html>
   );

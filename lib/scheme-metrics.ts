@@ -1,5 +1,6 @@
 import { assetClassFromCategory, isListedEtf, type AssetClassId } from "./fund-class";
 import { isActiveEquityCategory, slugifyAmc } from "./equity";
+import { isInceptionCagrReliable } from "./inception-cagr";
 
 export type SchemeMetric = {
   scheme_code: string;
@@ -28,6 +29,7 @@ export type SchemeMetric = {
   cagr_7y: number | null;
   cagr_10y: number | null;
   cagr_inception: number | null;
+  inception_cagr_reliable?: boolean;
   fetched_at?: string;
 };
 
@@ -159,7 +161,9 @@ export function equalWeightCategoryAverages(rows: SchemeMetric[]): Record<string
   for (const [category, list] of byCat) {
     const avg = { category, n: list.length } as CategoryAverage;
     for (const key of CATEGORY_AVG_KEYS) {
-      avg[key] = meanIgnoreNull(list.map((r) => r[key]));
+      avg[key] = meanIgnoreNull(
+        list.map((r) => (key === "cagr_inception" && !isInceptionCagrReliable(r) ? null : r[key])),
+      );
     }
     out[category] = avg;
   }

@@ -2,12 +2,68 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useLayoutEffect, useState } from "react";
+import { createContext, Suspense, useContext, useLayoutEffect, useState, useSyncExternalStore } from "react";
+import {
+  HeaderSearchButton,
+  HeaderSearchIconButton,
+  SearchProvider,
+} from "@/components/command-search";
 import { LoadError } from "@/components/load-ui";
 import { ThemeToggle } from "@/components/theme";
-import { formatMonthLabel, formatMonthShort } from "@/lib/format";
-import { loadMonths, peekCoverage, peekMonths } from "@/lib/load-months";
+import type { DataFreshness } from "@/lib/data-freshness";
+import { formatDataAsOfLine, formatDayLabel, formatMonthLabel, formatMonthShort } from "@/lib/format";
+import { pageHoldingsMonth } from "@/lib/holdings-month-pick";
+import { loadMonths, peekCoverage, peekFreshness, peekMonths } from "@/lib/load-months";
 import { prefetchHomeData } from "@/lib/prefetch-home";
+import { sessionCacheSet, sessionCacheSubscribe } from "@/lib/session-cache";
+
+const FreshnessContext = createContext<DataFreshness | null>(null);
+const MonthsContext = createContext<string[]>([]);
+
+export function useHoldingsMonths(): string[] {
+  const layoutMonths = useContext(MonthsContext);
+  const cached = useSyncExternalStore(sessionCacheSubscribe, peekMonths, () => layoutMonths);
+  return cached.length ? cached : layoutMonths;
+}
+
+export function UnavailableMonthNote({ requested, showing }: { requested: string; showing: string }) {
+  if (!requested || !showing || requested === showing) return null;
+  return (
+    <p className="text-xs text-muted">
+      {formatMonthLabel(requested)} isn&apos;t available yet, showing {formatMonthLabel(showing)}
+    </p>
+  );
+}
+
+export function DataAsOfNote({
+  variant = "full",
+  freshness: freshnessProp,
+}: {
+  variant?: "full" | "returns";
+  freshness?: DataFreshness | null;
+}) {
+  const fromLayout = useContext(FreshnessContext);
+  const peeked = useSyncExternalStore(sessionCacheSubscribe, peekFreshness, () => freshnessProp ?? fromLayout ?? null);
+  const freshness = freshnessProp ?? fromLayout ?? peeked;
+  if (variant === "returns") {
+    const returns = formatDayLabel(freshness?.returnsUpdated);
+    if (!returns) return null;
+    return <p className="text-[11px] leading-4 text-muted">Returns updated {returns}</p>;
+  }
+  const line = formatDataAsOfLine({
+    holdingsMonth: freshness?.holdingsMonth,
+    returnsUpdated: freshness?.returnsUpdated,
+  });
+  if (!line) return null;
+  return (
+    <div className="space-y-0.5">
+      <p className="text-[11px] leading-4 text-muted">{line}</p>
+      {freshness?.stale ? (
+        <p className="text-[11px] leading-4 text-faint">Newer holdings are not available yet.</p>
+      ) : null}
+    </div>
+  );
+}
 
 function MonthSelectFallback() {
   return (
@@ -36,21 +92,25 @@ function MonthSelect() {
   const pathname = usePathname();
   const search = useSearchParams();
   const router = useRouter();
-  const [months, setMonths] = useState<string[]>([]);
-  const [status, setStatus] = useState<"boot" | "loading" | "ready" | "error">("boot");
-  const month = search.get("month") || months[0] || "";
+  const layoutMonths = useContext(MonthsContext);
+  const cachedMonths = useSyncExternalStore(sessionCacheSubscribe, peekMonths, () => layoutMonths);
+  const months = cachedMonths.length ? cachedMonths : layoutMonths;
+  const [status, setStatus] = useState<"boot" | "loading" | "ready" | "error">(
+    months.length ? "ready" : "boot",
+  );
+  const requested = search.get("month") || "";
+  const picked = pageHoldingsMonth(requested, months);
+  const month = picked.month;
 
   function refresh() {
     if (!peekMonths().length) setStatus("loading");
     loadMonths()
-      .then((next) => {
-        setMonths(next);
+      .then(() => {
         setStatus("ready");
       })
       .catch(() => {
         const cached = peekMonths();
-        if (cached.length) {
-          setMonths(cached);
+        if (cached.length || layoutMonths.length) {
           setStatus("ready");
         } else {
           setStatus("error");
@@ -61,29 +121,24 @@ function MonthSelect() {
   useLayoutEffect(() => {
     queueMicrotask(() => {
       const cached = peekMonths();
-      if (cached.length) {
-        setMonths(cached);
-        setStatus("ready");
-      } else {
-        setStatus("loading");
-      }
-      if (!peekMonths().length) setStatus("loading");
-      loadMonths()
-        .then((next) => {
-          setMonths(next);
+        if (cached.length || layoutMonths.length) {
           setStatus("ready");
-        })
-        .catch(() => {
-          const cachedMonths = peekMonths();
-          if (cachedMonths.length) {
-            setMonths(cachedMonths);
+        } else {
+          setStatus("loading");
+        }
+        loadMonths()
+          .then(() => {
             setStatus("ready");
-          } else {
-            setStatus("error");
-          }
-        });
+          })
+          .catch(() => {
+            if (peekMonths().length || layoutMonths.length) {
+              setStatus("ready");
+            } else {
+              setStatus("error");
+            }
+          });
     });
-  }, [month]);
+  }, [month, layoutMonths.length]);
 
   function setMonth(next: string) {
     if (pathname.startsWith("/month/")) {
@@ -111,47 +166,33 @@ function MonthSelect() {
   }
 
   return (
-    <div className="flex h-8 w-full flex-wrap items-center gap-2 text-sm">
-      <span className="text-muted">Holdings as of</span>
-      <select
-        className="h-8 min-w-0 flex-1 rounded border border-border bg-input px-2 py-1 md:flex-none"
-        value={month}
-        onChange={(e) => setMonth(e.target.value)}
-      >
-        {months.length === 0 ? <option value="">No data</option> : null}
-        {months.map((m) => (
-          <option key={m} value={m}>
-            {formatMonthLabel(m)}
-          </option>
-        ))}
-      </select>
-      <CoverageChip month={month} latest={months[0] || ""} />
+    <div className="space-y-1">
+      <div className="flex h-8 w-full flex-wrap items-center gap-2 text-sm">
+        <span className="text-muted">Holdings as of</span>
+        <select
+          className="h-8 min-w-0 flex-1 rounded border border-border bg-input px-2 py-1 md:flex-none"
+          value={month}
+          onChange={(e) => setMonth(e.target.value)}
+        >
+          {months.length === 0 ? <option value="">No data</option> : null}
+          {months.map((m) => (
+            <option key={m} value={m}>
+              {formatMonthLabel(m)}
+            </option>
+          ))}
+        </select>
+        <CoverageChip month={month} latest={months[0] || ""} />
+      </div>
+      <DataAsOfNote />
     </div>
   );
 }
 
-const NAV_GROUPS = [
-  {
-    label: "Research",
-    items: [
-      { href: "/adds-cuts", label: "Adds & cuts" },
-      { href: "/sectors", label: "Sectors" },
-    ],
-  },
-  {
-    label: "Funds",
-    items: [
-      { href: "/screener", label: "Screener" },
-      { href: "/compare", label: "Compare" },
-    ],
-  },
-  {
-    label: "You",
-    items: [
-      { href: "/watchlist", label: "Watchlist" },
-      { href: "/portfolio", label: "Portfolio", soon: true },
-    ],
-  },
+const NAV_ITEMS: { href: string; label: string; match?: (path: string) => boolean }[] = [
+  { href: "/reports", label: "Report", match: (path) => path.startsWith("/reports") },
+  { href: "/adds-cuts", label: "Adds & cuts", match: (path) => path === "/adds-cuts" || path.startsWith("/adds-cuts") },
+  { href: "/funds", label: "Funds", match: (path) => path === "/funds" || path.startsWith("/funds/") || path.startsWith("/schemes/") },
+  { href: "/stocks", label: "Stocks", match: (path) => path === "/stocks" || path.startsWith("/stocks/") },
 ];
 
 function isResearchPath(pathname: string) {
@@ -170,6 +211,10 @@ function isWidePath(pathname: string) {
     isResearchPath(pathname) ||
     pathname === "/screener" ||
     pathname === "/compare" ||
+    pathname === "/overlap" ||
+    pathname.startsWith("/reports") ||
+    pathname === "/funds" ||
+    pathname === "/stocks" ||
     pathname.startsWith("/schemes/")
   );
 }
@@ -184,57 +229,86 @@ function BrandMark() {
   );
 }
 
-function navClass(pathname: string, href: string, soon?: boolean) {
-  if (soon) return "whitespace-nowrap text-sm text-muted";
-  const on =
-    pathname === href ||
-    (href !== "/" && pathname.startsWith(href)) ||
-    (href === "/screener" && pathname.startsWith("/schemes"));
+function navClass(on: boolean) {
   return on
-    ? "whitespace-nowrap text-sm font-medium text-foreground underline decoration-foreground/30 underline-offset-4"
+    ? "whitespace-nowrap text-sm font-medium text-accent underline decoration-accent/40 underline-offset-4"
     : "whitespace-nowrap text-sm text-muted hover:text-foreground";
 }
 
-function NavGroups({ pathname, stacked }: { pathname: string; stacked?: boolean }) {
+function PrimaryNav({
+  pathname,
+  latestReport,
+  stacked,
+}: {
+  pathname: string;
+  latestReport: string;
+  stacked?: boolean;
+}) {
   return (
-    <>
-      {NAV_GROUPS.map((group) => (
-        <div key={group.label} className={stacked ? "" : "shrink-0"}>
-          <div className="mb-1 text-[10px] font-medium uppercase tracking-[0.16em] text-faint">
-            {group.label}
-          </div>
-          <div className={stacked ? "flex flex-col gap-2" : "flex items-center gap-3"}>
-            {group.items.map((item) =>
-              item.soon ? (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`${navClass(pathname, item.href, true)} inline-flex items-center gap-1.5`}
-                  title="Coming soon"
-                >
-                  {item.label}
-                  <span className="text-[10px] font-medium uppercase tracking-wide text-faint">soon</span>
-                </Link>
-              ) : (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={navClass(pathname, item.href)}
-                  onMouseEnter={item.href === "/adds-cuts" ? () => prefetchHomeData() : undefined}
-                  onFocus={item.href === "/adds-cuts" ? () => prefetchHomeData() : undefined}
-                >
-                  {item.label}
-                </Link>
-              ),
-            )}
-          </div>
-        </div>
-      ))}
-    </>
+    <div className={stacked ? "flex flex-col gap-3" : "flex items-center gap-5 lg:gap-6"}>
+      {NAV_ITEMS.map((item) => {
+        const href = item.label === "Report" ? latestReport : item.href;
+        const on = item.match ? item.match(pathname) : pathname === item.href;
+        return (
+          <Link
+            key={item.label}
+            href={href}
+            className={navClass(on)}
+            onMouseEnter={item.href === "/adds-cuts" ? () => prefetchHomeData() : undefined}
+            onFocus={item.href === "/adds-cuts" ? () => prefetchHomeData() : undefined}
+          >
+            {item.label}
+          </Link>
+        );
+      })}
+    </div>
   );
 }
 
-export function Shell({ children }: { children: React.ReactNode }) {
+function WatchlistIconLink() {
+  return (
+    <Link
+      href="/watchlist"
+      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted hover:text-foreground"
+      aria-label="Watchlist"
+    >
+      <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" aria-hidden>
+        <path
+          d="M8 2.4 9.7 6h3.7l-3 2.3L11.7 13 8 10.8 4.3 13l1.3-4.7-3-2.3h3.7L8 2.4Z"
+          stroke="currentColor"
+          strokeWidth="1.3"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </Link>
+  );
+}
+
+function OpenSourceLink({ className = "" }: { className?: string }) {
+  return (
+    <a
+      href="https://github.com/Leovaldez42/mf-screener"
+      className={`group inline-flex items-center gap-1.5 text-sm ${className}`}
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      <span className="text-rose-500" aria-hidden>
+        ♥
+      </span>
+      <span className="text-muted group-hover:text-foreground">Open source</span>
+    </a>
+  );
+}
+
+export function Shell({
+  children,
+  freshness,
+  months = [],
+}: {
+  children: React.ReactNode;
+  freshness?: DataFreshness | null;
+  months?: string[];
+}) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPath, setMenuPath] = useState(pathname);
@@ -243,67 +317,72 @@ export function Shell({ children }: { children: React.ReactNode }) {
     setMenuOpen(false);
   }
 
-  const showMonth = isResearchPath(pathname);
+  const showMonth = isResearchPath(pathname) && !pathname.startsWith("/funds/");
+  useLayoutEffect(() => {
+    if (months.length && !peekMonths().length) sessionCacheSet("months", months);
+    loadMonths().catch(() => undefined);
+  }, [months]);
   const home = pathname === "/";
   const wide = isWidePath(pathname);
-  const mainWidth = home ? "max-w-5xl" : wide ? "max-w-6xl" : "max-w-3xl";
+  const mainWidth = home ? "max-w-6xl" : wide ? "max-w-6xl" : "max-w-3xl";
+  const latestReport = months[0] ? `/reports/${months[0]}` : "/reports";
 
   return (
+    <MonthsContext.Provider value={months}>
+    <FreshnessContext.Provider value={freshness ?? null}>
+    <SearchProvider>
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <header className="z-40 border-b border-border bg-card">
-        <div className="flex w-full flex-nowrap items-center gap-6 px-4 py-3 lg:px-6">
+        <div className="flex w-full flex-nowrap items-center gap-4 px-4 py-3 lg:gap-6 lg:px-6">
           <Link href="/" className="flex shrink-0 items-center gap-2 font-medium tracking-tight">
             <BrandMark />
             Thinkbrew
           </Link>
-          <nav className="hidden min-w-0 flex-1 items-end gap-8 overflow-hidden md:flex md:flex-nowrap lg:gap-10" aria-label="Primary">
-            <NavGroups pathname={pathname} />
+          <nav className="hidden min-w-0 items-center md:flex" aria-label="Primary">
+            <PrimaryNav pathname={pathname} latestReport={latestReport} />
           </nav>
-          <div className="ml-auto flex shrink-0 items-center gap-3">
-            <a
-              href="https://github.com/Leovaldez42/mf-screener"
-              className="group hidden items-center gap-1.5 text-sm sm:inline-flex"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <span className="text-rose-500" aria-hidden>
-                ♥
-              </span>
-              <span className="text-muted group-hover:text-foreground">Open source</span>
-            </a>
-            <ThemeToggle />
+          <div className="ml-auto flex min-w-0 shrink-0 items-center gap-2 sm:gap-3">
+            <HeaderSearchButton />
+            <HeaderSearchIconButton />
+            <div className="hidden items-center gap-2 md:flex">
+              <WatchlistIconLink />
+              <ThemeToggle />
+              <OpenSourceLink className="hidden lg:inline-flex" />
+            </div>
             <button
               type="button"
-              className="rounded-md border border-border px-2 py-1 text-xs text-muted md:hidden"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted hover:text-foreground md:hidden"
               onClick={() => setMenuOpen((v) => !v)}
               aria-expanded={menuOpen}
               aria-label={menuOpen ? "Close menu" : "Open menu"}
             >
-              {menuOpen ? "Close" : "Menu"}
+              {menuOpen ? (
+                <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" aria-hidden>
+                  <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" aria-hidden>
+                  <path d="M3 4.5h10M3 8h10M3 11.5h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                </svg>
+              )}
             </button>
           </div>
         </div>
         {menuOpen ? (
           <div className="border-t border-border px-4 py-4 md:hidden">
-            <nav className="flex flex-col gap-5 text-sm" aria-label="Mobile">
-              <NavGroups pathname={pathname} stacked />
-              <a
-                href="https://github.com/Leovaldez42/mf-screener"
-                className="group inline-flex items-center gap-1.5 text-sm"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <span className="text-rose-500" aria-hidden>
-                  ♥
-                </span>
-                <span className="text-muted group-hover:text-foreground">Open source</span>
-              </a>
+            <nav className="flex flex-col gap-4 text-sm" aria-label="Mobile">
+              <PrimaryNav pathname={pathname} latestReport={latestReport} stacked />
+              <Link href="/watchlist" className={navClass(pathname.startsWith("/watchlist"))}>
+                Watchlist
+              </Link>
+              <ThemeToggle />
+              <OpenSourceLink />
             </nav>
           </div>
         ) : null}
         {showMonth ? (
           <div className="border-t border-border bg-card">
-            <div className="w-full px-4 py-2 lg:px-6">
+            <div className={`mx-auto w-full ${mainWidth} px-4 py-2 lg:px-6`}>
               <Suspense fallback={<MonthSelectFallback />}>
                 <MonthSelect />
               </Suspense>
@@ -312,7 +391,43 @@ export function Shell({ children }: { children: React.ReactNode }) {
         ) : null}
       </header>
       <main className={`mx-auto w-full ${mainWidth} flex-1 px-4 py-6 lg:px-6`}>{children}</main>
+      <footer className="border-t border-border">
+        <div className={`mx-auto flex w-full ${mainWidth} flex-col gap-3 px-4 py-4 lg:flex-row lg:items-center lg:justify-between lg:px-6`}>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <Link href="/" className="flex items-center gap-2 text-sm font-medium">
+              <BrandMark />
+              Thinkbrew
+            </Link>
+            <nav className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted" aria-label="Footer">
+              <Link className="hover:text-foreground" href="/about">
+                About
+              </Link>
+              <Link className="hover:text-foreground" href="/how-we-calculate">
+                How we calculate
+              </Link>
+              <Link className="hover:text-foreground" href="/data-sources">
+                Data sources
+              </Link>
+              <Link className="hover:text-foreground" href="/disclaimer">
+                Disclaimer
+              </Link>
+              <a
+                className="hover:text-foreground"
+                href="https://github.com/Leovaldez42/mf-screener"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Open source
+              </a>
+            </nav>
+          </div>
+          <DataAsOfNote freshness={freshness} />
+        </div>
+      </footer>
     </div>
+    </SearchProvider>
+    </FreshnessContext.Provider>
+    </MonthsContext.Provider>
   );
 }
 
@@ -328,13 +443,25 @@ export function LoadingWait({ label = "Loading…" }: { label?: string }) {
   );
 }
 
-export function Delta({ value }: { value: number }) {
+export function Delta({
+  value,
+  icon = true,
+  className = "",
+}: {
+  value: number;
+  icon?: boolean;
+  className?: string;
+}) {
   const cls = value > 0 ? "text-gain" : value < 0 ? "text-loss" : "text-muted";
-  const sign = value > 0 ? "+" : "";
+  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
+  const mark = !icon || value === 0 ? null : value > 0 ? "▲" : "▼";
   return (
-    <span className={cls}>
-      {sign}
-      {value.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+    <span className={`inline-flex items-center gap-0.5 whitespace-nowrap tabular-nums ${cls} ${className}`}>
+      {mark ? <span className="shrink-0" aria-hidden>{mark}</span> : null}
+      <span>
+        {sign}
+        {Math.abs(value).toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+      </span>
     </span>
   );
 }

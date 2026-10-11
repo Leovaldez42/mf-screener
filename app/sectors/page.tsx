@@ -3,8 +3,13 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { LoadError, TableSkeleton, UpdatingNote } from "@/components/load-ui";
-import { Delta } from "@/components/ui";
+import { SectorPill } from "@/components/sector-pill";
+import { Delta, UnavailableMonthNote, useHoldingsMonths } from "@/components/ui";
+import { sectorFill } from "@/lib/sector-color";
 import { isJunkSector, normalizeSectorKey, sectorLabel } from "@/lib/format";
+import { pageHoldingsMonth } from "@/lib/holdings-month-pick";
+import { loadMonths } from "@/lib/load-months";
+import { excludedNoPriorLabel } from "@/lib/mom-universe";
 import { sessionCacheGet, sessionCacheSet } from "@/lib/session-cache";
 
 type Row = { sector: string; net_value_delta_cr: number; net_qty_delta: number };
@@ -23,9 +28,9 @@ function peekSectors(month: string) {
 function foldSectors(rows: Row[]): Row[] {
   const map = new Map<string, Row>();
   for (const r of rows) {
-    if (isJunkSector(r.sector)) continue;
-    const key = normalizeSectorKey(r.sector);
-    if (!key) continue;
+    const blank = !(r.sector || "").trim();
+    if (!blank && isJunkSector(r.sector)) continue;
+    const key = normalizeSectorKey(r.sector) || "unclassified";
     const cur = map.get(key) || {
       sector: sectorLabel(r.sector),
       net_value_delta_cr: 0,
@@ -57,7 +62,10 @@ function SectorsFallback() {
 
 function SectorsPage() {
   const search = useSearchParams();
-  const month = search.get("month") || "";
+  const requested = search.get("month") || "";
+  const availableMonths = useHoldingsMonths();
+  const waitingMonths = Boolean(requested && availableMonths.length === 0);
+  const month = waitingMonths ? "" : pageHoldingsMonth(requested, availableMonths).month;
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
@@ -65,8 +73,14 @@ function SectorsPage() {
   const [reload, setReload] = useState(0);
   const [sortKey, setSortKey] = useState<SortKey>("net_value_delta_cr");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [excludedNoPrior, setExcludedNoPrior] = useState(0);
 
   useLayoutEffect(() => {
+    loadMonths().catch(() => undefined);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (waitingMonths) return;
     const hit = peekSectors(month);
     queueMicrotask(() => {
       if (hit.length) {
@@ -77,9 +91,10 @@ function SectorsPage() {
         setLoading(true);
       }
     });
-  }, [month]);
+  }, [month, waitingMonths]);
 
   useEffect(() => {
+    if (waitingMonths) return;
     let cancelled = false;
     const key = `sectors:${month || "_"}`;
     const hit = sessionCacheGet<Row[]>(key);
@@ -111,6 +126,7 @@ function SectorsPage() {
         setError(null);
         const next = (d.rows || []) as Row[];
         setRows(next);
+        setExcludedNoPrior(Number(d.excludedNoPriorMonth) || 0);
         if (r.ok) sessionCacheSet(key, next);
       })
       .catch(() => {
@@ -124,7 +140,7 @@ function SectorsPage() {
     return () => {
       cancelled = true;
     };
-  }, [month, reload]);
+  }, [month, reload, waitingMonths]);
 
   const folded = useMemo(() => foldSectors(rows), [rows]);
   const sorted = useMemo(() => {
@@ -162,6 +178,10 @@ function SectorsPage() {
         fewer expensive ones in the same sector, can show qty down and rupees up. Share counts are
         not comparable across stocks. Click a column header to sort.
       </p>
+      {excludedNoPriorLabel(excludedNoPrior) ? (
+        <p className="text-xs text-faint">{excludedNoPriorLabel(excludedNoPrior)}</p>
+      ) : null}
+      <UnavailableMonthNote requested={requested} showing={month} />
       {error ? <LoadError message={error} onRetry={() => setReload((n) => n + 1)} /> : null}
       {loading && folded.length === 0 ? (
         <TableSkeleton columns={COLUMNS.map((c) => ({ label: c.label }))} rows={8} />
@@ -195,14 +215,19 @@ function SectorsPage() {
                 const pct = (Math.abs(r.net_value_delta_cr) / maxAbs) * 100;
                 return (
                   <tr key={r.sector} className="border-t border-border">
-                    <td className="py-2 pr-3">{r.sector}</td>
+                    <td className="py-2 pr-3">
+                      <SectorPill sector={r.sector} />
+                    </td>
                     <td className="py-2 pr-3">
                       <Delta value={r.net_qty_delta} />
                     </td>
                     <td className="py-2">
                       <div className="flex min-w-40 items-center gap-3">
-                        <div className="h-1.5 min-w-16 flex-1 overflow-hidden rounded bg-surface">
-                          <div className="h-1.5 rounded bg-foreground/35" style={{ width: `${pct}%` }} />
+                        <div className="h-1.5 min-w-16 flex-1 overflow-hidden rounded bg-raised">
+                          <div
+                            className="h-1.5 rounded"
+                            style={{ width: `${pct}%`, background: sectorFill(r.sector) }}
+                          />
                         </div>
                         <span className="w-20 shrink-0 text-right">
                           <Delta value={r.net_value_delta_cr} />

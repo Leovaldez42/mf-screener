@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ShareBar } from "@/components/share-bar";
 import { cleanChaseRows } from "@/lib/chase-clean";
 import { getChaseRows } from "@/lib/cached-holdings";
-import { formatMonthLabel, formatNumber, sectorLabel } from "@/lib/format";
+import { formatMonthLabel, formatNumber, isJunkSector, sectorLabel } from "@/lib/format";
 import { listCompleteMonths } from "@/lib/holdings-month";
 import { monthShareCaption } from "@/lib/share-text";
 import { isYearMonth, ogMonthPath, SITE_URL, siteUrl } from "@/lib/site";
@@ -65,7 +65,7 @@ export default async function MonthPage({ params }: Props) {
   const sectorTotals = new Map<string, number>();
   for (const r of cleaned) {
     const key = sectorLabel(r.sector);
-    if (key === "Unknown") continue;
+    if (isJunkSector(r.sector) && (r.sector || "").trim()) continue;
     sectorTotals.set(key, (sectorTotals.get(key) ?? 0) + r.net_value_delta_cr);
   }
   const leading = [...sectorTotals.entries()].sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))[0];

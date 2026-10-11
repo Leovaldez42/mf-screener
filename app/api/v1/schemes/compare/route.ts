@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { METRICS_CACHE_CONTROL, jsonCached, jsonNoStore } from "@/lib/http-cache";
+import { withInceptionCagrFlag } from "@/lib/inception-cagr";
 import { COMPARE_MAX, type SchemeMetric } from "@/lib/scheme-metrics";
 import { createAnonClient, supabaseConfigured } from "@/lib/supabase";
 
@@ -21,6 +22,8 @@ export async function GET(req: NextRequest) {
   const { data, error } = await db.from("scheme_metrics").select("*").in("scheme_code", codes);
   if (error) return jsonNoStore({ error: error.message }, 500);
   const byCode = new Map((data || []).map((r) => [r.scheme_code as string, r]));
-  const schemes = codes.map((c) => byCode.get(c)).filter(Boolean) as SchemeMetric[];
+  const schemes = (codes.map((c) => byCode.get(c)).filter(Boolean) as SchemeMetric[]).map(
+    (row) => withInceptionCagrFlag(row),
+  );
   return jsonCached({ schemes }, METRICS_CACHE_CONTROL);
 }

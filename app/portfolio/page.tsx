@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { pageMetadata } from "@/lib/page-meta";
 
-export const metadata: Metadata = {
-  title: "Portfolio",
+export const metadata: Metadata = pageMetadata({
+  title: "Portfolio · Thinkbrew",
   description: "Portfolio import for Thinkbrew is coming soon.",
-};
+  path: "/portfolio",
+  noindex: true,
+});
 
 export default function PortfolioPage() {
   return (

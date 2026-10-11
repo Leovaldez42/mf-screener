@@ -1,6 +1,16 @@
-"use client";
+import type { Metadata } from "next";
+import { pageMetadata } from "@/lib/page-meta";
+import { createAnonClient, supabaseConfigured } from "@/lib/supabase";
 
-import { useEffect, useState } from "react";
+export const dynamic = "force-dynamic";
+export const revalidate = 120;
+
+export const metadata: Metadata = pageMetadata({
+  title: "Data · Thinkbrew",
+  description:
+    "How Thinkbrew ingests Indian mutual fund holdings and Direct Growth scheme metrics. Not investment advice.",
+  path: "/data",
+});
 
 type Run = {
   id: string;
@@ -14,19 +24,25 @@ type Run = {
   notes: string | null;
 };
 
-export default function DataPage() {
-  const [runs, setRuns] = useState<Run[]>([]);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch("/api/v1/ingest-runs", { cache: "no-store" })
-      .then(async (r) => {
-        const d = await r.json();
-        if (!r.ok) setError(d.error || "Could not load runs");
-        setRuns(d.runs || []);
-      })
-      .catch(() => setError("Could not load runs"));
-  }, []);
+export default async function DataPage() {
+  let runs: Run[] = [];
+  let error: string | null = null;
+  if (!supabaseConfigured()) {
+    error = "Holdings data is not configured.";
+  } else {
+    try {
+      const db = createAnonClient();
+      const { data, error: qErr } = await db
+        .from("ingest_runs")
+        .select("*")
+        .order("started_at", { ascending: false })
+        .limit(20);
+      if (qErr) error = qErr.message;
+      else runs = (data || []) as Run[];
+    } catch (e) {
+      error = e instanceof Error ? e.message : "Could not load runs";
+    }
+  }
 
   return (
     <div className="space-y-4">

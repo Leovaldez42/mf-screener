@@ -2,32 +2,12 @@
 
 import { useEffect, useId, useMemo, useState } from "react";
 import { formatNumber } from "@/lib/format";
+import { CASH_SWATCH, OTHER_SWATCH, sectorFill } from "@/lib/sector-color";
 
 export type FundSector = { name: string; weight_pct: number };
 
 const OVERVIEW_TOP = 8;
 const CASH_EPS = 0.05;
-
-/** Categorical hues — a bit more chroma than zinc, still not neon. */
-const SWATCHES = [
-  "color-mix(in srgb, #4f7fd4 88%, var(--muted))",
-  "color-mix(in srgb, #2a9d8f 86%, var(--muted))",
-  "color-mix(in srgb, #d4a017 84%, var(--muted))",
-  "color-mix(in srgb, #d45a72 86%, var(--muted))",
-  "color-mix(in srgb, #7c5cbf 86%, var(--muted))",
-  "color-mix(in srgb, #3d9a58 86%, var(--muted))",
-  "color-mix(in srgb, #2f8fb8 88%, var(--muted))",
-  "color-mix(in srgb, #d46b2c 84%, var(--muted))",
-  "color-mix(in srgb, #b04d9e 86%, var(--muted))",
-  "color-mix(in srgb, #5aa35a 86%, var(--muted))",
-];
-
-const CASH_SWATCH = "color-mix(in srgb, var(--faint) 55%, var(--border))";
-const OTHER_SWATCH = "color-mix(in srgb, var(--faint) 40%, var(--surface))";
-
-function swatchFor(i: number) {
-  return SWATCHES[((i % SWATCHES.length) + SWATCHES.length) % SWATCHES.length];
-}
 
 function pct(n: number) {
   return `${formatNumber(n, 1)}%`;
@@ -52,7 +32,7 @@ export function FundSectorMap({ sectors }: { sectors: FundSector[] }) {
     const top = sorted.slice(0, OVERVIEW_TOP);
     const rest = sorted.slice(OVERVIEW_TOP);
     const restWeight = rest.reduce((sum, s) => sum + s.weight_pct, 0);
-    const colorByName = new Map(sorted.map((s, i) => [s.name, swatchFor(i)]));
+    const colorByName = new Map(sorted.map((s) => [s.name, sectorFill(s.name)]));
     return { sorted, equity, cash, top, rest, restWeight, colorByName };
   }, [sectors]);
 
@@ -72,11 +52,13 @@ export function FundSectorMap({ sectors }: { sectors: FundSector[] }) {
 
   const { sorted, equity, cash, top, rest, restWeight, colorByName } = model;
   const showCash = cash >= CASH_EPS;
+  const shownEquity = top.reduce((sum, s) => sum + s.weight_pct, 0) + restWeight;
+  const showPartialBookHint = Math.abs(shownEquity - equity) > 2;
 
   const sheetRows = useMemo(() => {
     const rows: { name: string; weight_pct: number; swatch: string }[] = sorted.map((s) => ({
       ...s,
-      swatch: colorByName.get(s.name) || swatchFor(0),
+      swatch: colorByName.get(s.name) || sectorFill(s.name),
     }));
     if (showCash) rows.push({ name: "Cash & others", weight_pct: cash, swatch: CASH_SWATCH });
     const needle = q.trim().toLowerCase();
@@ -100,7 +82,9 @@ export function FundSectorMap({ sectors }: { sectors: FundSector[] }) {
           Total 100%
         </p>
       </div>
-      <p className="text-xs text-faint">Top holdings by weight — not the full book.</p>
+      {showPartialBookHint ? (
+        <p className="text-xs text-faint">Top holdings by weight — not the full book.</p>
+      ) : null}
 
       <div className="space-y-2">
         {top.map((s) => (
@@ -108,7 +92,7 @@ export function FundSectorMap({ sectors }: { sectors: FundSector[] }) {
             key={s.name}
             name={s.name}
             weight={s.weight_pct}
-            swatch={colorByName.get(s.name) || swatchFor(0)}
+            swatch={colorByName.get(s.name) || sectorFill(s.name)}
           />
         ))}
         {rest.length > 0 ? (

@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { pageMetadata } from "@/lib/page-meta";
 
-export const metadata: Metadata = {
-  title: "About",
+export const metadata: Metadata = pageMetadata({
+  title: "About · Thinkbrew",
   description: "What Thinkbrew covers, where the holdings come from, and how to read the numbers.",
-};
+  path: "/about",
+});
 
 export default function AboutPage() {
   return (
