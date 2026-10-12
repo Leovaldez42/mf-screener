@@ -4,7 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { LoadError, TableSkeleton, UpdatingNote } from "@/components/load-ui";
 import { SectorPill } from "@/components/sector-pill";
-import { Delta, UnavailableMonthNote, useHoldingsMonths } from "@/components/ui";
+import { Delta, NetBoughtLabel, UnavailableMonthNote, useHoldingsMonths } from "@/components/ui";
 import { sectorFill } from "@/lib/sector-color";
 import { isJunkSector, normalizeSectorKey, sectorLabel } from "@/lib/format";
 import { pageHoldingsMonth } from "@/lib/holdings-month-pick";
@@ -18,7 +18,7 @@ type SortKey = "sector" | "net_qty_delta" | "net_value_delta_cr";
 const COLUMNS: { key: SortKey; label: string }[] = [
   { key: "sector", label: "Sector" },
   { key: "net_qty_delta", label: "Net qty" },
-  { key: "net_value_delta_cr", label: "Net ₹ cr" },
+  { key: "net_value_delta_cr", label: "Net bought (₹ cr)" },
 ];
 
 function peekSectors(month: string) {
@@ -53,7 +53,7 @@ function SectorsFallback() {
     <div className="space-y-4">
       <h1 className="text-xl font-medium">Sectors</h1>
       <p className="text-sm text-muted">
-        Net qty is the sum of share changes. Net ₹ cr is the change in disclosed market value.
+        Net qty is the sum of share changes. Net bought values those shares at month-end price.
       </p>
       <TableSkeleton columns={COLUMNS.map((c) => ({ label: c.label }))} rows={8} />
     </div>
@@ -173,10 +173,9 @@ function SectorsPage() {
         {updating ? <UpdatingNote /> : null}
       </div>
       <p className="text-sm text-muted">
-        Net qty is the sum of share changes. Net ₹ cr is the change in disclosed market value, which
-        includes price moves. Selling shares of a name that rose, or selling cheap shares and adding
-        fewer expensive ones in the same sector, can show qty down and rupees up. Share counts are
-        not comparable across stocks. Click a column header to sort.
+        Net qty is the sum of share changes. Net bought values those shares at this month&apos;s
+        closing price, so a name funds sold does not flip to a buy just because the price rose. Share
+        counts are not comparable across stocks. Click a column header to sort.
       </p>
       {excludedNoPriorLabel(excludedNoPrior) ? (
         <p className="text-xs text-faint">{excludedNoPriorLabel(excludedNoPrior)}</p>
@@ -202,7 +201,7 @@ function SectorsPage() {
                         className="inline-flex items-center gap-1 hover:text-foreground"
                         onClick={() => onSort(column.key)}
                       >
-                        {column.label}
+                        {column.key === "net_value_delta_cr" ? <NetBoughtLabel /> : column.label}
                         <span className={isActive ? "text-foreground" : "text-faint"}>{arrow}</span>
                       </button>
                     </th>

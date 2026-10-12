@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { SectorPill } from "@/components/sector-pill";
 import { ShareBar } from "@/components/share-bar";
-import { DataAsOfNote, Delta, UnavailableMonthNote } from "@/components/ui";
+import { DataAsOfNote, Delta, NetBoughtLabel, UnavailableMonthNote } from "@/components/ui";
 import { formatMonthLabel, formatNumber } from "@/lib/format";
 import type { MonthlyReport, ReportAmcBet, ReportSectorRow, ReportStockRow } from "@/lib/monthly-report";
 import {
@@ -169,7 +169,9 @@ function MoneyTable({
           <thead className="border-b border-border bg-raised text-xs text-muted">
             <tr>
               <th className="px-3 py-2 font-medium">Stock</th>
-              <th className="px-3 py-2 font-medium">Net ₹ cr</th>
+              <th className="px-3 py-2 font-medium">
+                <NetBoughtLabel />
+              </th>
               <th className="px-3 py-2 font-medium">Funds adding / cutting</th>
               <th className="px-3 py-2 font-medium">Sector</th>
             </tr>
@@ -398,10 +400,13 @@ export function ReportStory({
           <details className="mt-3 rounded-lg border border-border bg-raised px-3 py-2 text-sm">
             <summary className="cursor-pointer text-muted">How we calculate this</summary>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-              Month-end holdings disclosures for active-equity funds. We count share-quantity adds and cuts,
-              not portfolio weight. Cash, TREPS, ETFs, fund units and derivatives are dropped. Funds with no
-              prior-month book (a first disclosure) are excluded from month-on-month counts so the whole book
-              is not treated as &quot;bought.&quot; {s.excludedNoPriorMonth} fund
+              Month-end holdings disclosures for active-equity funds. We count share-quantity adds and
+              cuts, not portfolio weight. Net bought (₹ cr) is those share changes valued at this
+              month&apos;s closing price (last month&apos;s price on a full exit). A stock that only
+              marked up in price is not treated as bought. Cash, TREPS, ETFs, fund units and
+              derivatives are dropped. Funds with no prior-month book (a first disclosure) are
+              excluded from month-on-month counts so the whole book is not treated as
+              &quot;bought.&quot; {s.excludedNoPriorMonth} fund
               {s.excludedNoPriorMonth === 1 ? " was" : "s were"} excluded this month.
             </p>
           </details>
@@ -420,7 +425,9 @@ export function ReportStory({
             <div className="mt-1 text-2xl font-medium tabular-nums">{formatCoverage(s)}</div>
           </div>
           <div className="rounded-lg border border-border bg-card p-4">
-            <div className="text-xs uppercase tracking-[0.12em] text-faint">Net equity buying</div>
+            <div className="text-xs uppercase tracking-[0.12em] text-faint">
+              <NetBoughtLabel />
+            </div>
             <div className="mt-1 text-2xl font-medium tabular-nums">
               <Delta value={s.totalNetEquityBuyingCr} />
               <span className="ml-1 text-sm font-normal text-muted">₹ cr</span>
@@ -429,8 +436,7 @@ export function ReportStory({
         </div>
         {s.excludedNoPriorMonth > 0 ? (
           <p className="mt-2 text-sm text-muted">
-            Excludes {s.excludedNoPriorMonth} fund{s.excludedNoPriorMonth === 1 ? "" : "s"} with no prior month, so
-            totals differ slightly from Adds & cuts.
+            Excludes {s.excludedNoPriorMonth} fund{s.excludedNoPriorMonth === 1 ? "" : "s"} with no prior month.
           </p>
         ) : null}
       </div>

@@ -15,15 +15,20 @@ export default function HowWeCalculatePage() {
       <div>
         <h1 className="text-xl font-medium text-foreground">How we calculate</h1>
         <p className="mt-2">
-          Thinkbrew reads month-end portfolio books for Indian active-equity funds. Adds and cuts are share-quantity
-          changes between this month and the prior month, not moves in portfolio weight. A stock can rise in weight
-          just because the price moved.
+          Thinkbrew reads month-end portfolio books for Indian active-equity funds. Adds and cuts are
+          share-quantity changes between this month and the prior month, not moves in portfolio
+          weight. A stock can rise in weight just because the price moved.
         </p>
       </div>
       <section>
         <h2 className="text-base font-medium text-foreground">What counts</h2>
         <ul className="mt-2 list-disc space-y-2 pl-5">
           <li>Equity stocks in the book. Cash, TREPS, ETFs, fund units, REITs/InvITs and derivatives are dropped.</li>
+          <li>
+            Net bought (₹ cr) is share changes valued at this month&apos;s closing price (last
+            month&apos;s price on a full exit). It excludes price moves, so a name funds sold does
+            not show as bought if the stock only marked up.
+          </li>
           <li>
             Funds with no prior-month book (a first disclosure) are excluded from month-on-month totals so the whole
             book is not treated as “bought.”

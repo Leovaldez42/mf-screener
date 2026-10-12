@@ -5,6 +5,7 @@ import {
   pickCleanestDisplayName,
   type MergeableChase,
 } from "@/lib/instruments";
+import { holdingFlowCr } from "@/lib/holding-flow";
 import { comparableFamilyIds } from "@/lib/mom-universe";
 import type { ChaseRow, HoldingEvent } from "@/lib/types";
 
@@ -39,6 +40,7 @@ export type CanonicalFundDelta = {
   value_cr: number;
   prevValueCr: number;
   value_delta_cr: number;
+  mv_change_cr: number;
   weight_pct: number;
   prevWeightPct: number;
   weight_delta: number;
@@ -164,6 +166,7 @@ export function computeCanonicalBook(
   const weightsThis = new Map<string, number[]>();
   const netQty = new Map<string, number>();
   const netVal = new Map<string, number>();
+  const netMv = new Map<string, number>();
 
   for (const key of keys) {
     const cur = curMap.get(key);
@@ -179,8 +182,17 @@ export function computeCanonicalBook(
     const comparable = included.has(family_id);
     const event = comparable ? classifyHoldingEvent(prevQty, qty) : "hold";
     const qty_delta = comparable ? qty - prevQty : 0;
+    const mv_change_cr = comparable ? value_cr - prevValueCr : 0;
+    const value_delta_cr = comparable
+      ? holdingFlowCr({
+          quantity: qty,
+          market_value_cr: value_cr,
+          prev_quantity: prevQty,
+          prev_market_value_cr: prevValueCr,
+          qty_delta,
+        })
+      : 0;
     const momMove = comparable && event !== "hold";
-    const value_delta_cr = momMove ? value_cr - prevValueCr : 0;
     const weight_delta = comparable ? weight_pct - prevWeightPct : 0;
     const meta = stocks[stock_id];
     deltas.push({
@@ -195,6 +207,7 @@ export function computeCanonicalBook(
       value_cr,
       prevValueCr,
       value_delta_cr,
+      mv_change_cr,
       weight_pct,
       prevWeightPct,
       weight_delta,
@@ -212,6 +225,9 @@ export function computeCanonicalBook(
       const set = holdersPrior.get(stock_id) || new Set();
       set.add(family_id);
       holdersPrior.set(stock_id, set);
+    }
+    if (comparable) {
+      netMv.set(stock_id, (netMv.get(stock_id) || 0) + mv_change_cr);
     }
     if (momMove) {
       netQty.set(stock_id, (netQty.get(stock_id) || 0) + qty_delta);
@@ -238,6 +254,7 @@ export function computeCanonicalBook(
       fund_count_delta: comparableThis - comparablePrior,
       net_qty_delta: netQty.get(meta.stock_id) || 0,
       net_value_delta_cr: netVal.get(meta.stock_id) || 0,
+      mv_change_cr: netMv.get(meta.stock_id) || 0,
       median_weight_pct: median(weightsThis.get(meta.stock_id) || []),
     };
   });
