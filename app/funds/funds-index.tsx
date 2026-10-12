@@ -1,13 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { formatNumber } from "@/lib/format";
 import type { FundDirectoryRow } from "@/lib/directory";
+import { fundsHubPath } from "@/lib/funds-hub";
 
-export function FundsIndex({ funds, initialQ = "" }: { funds: FundDirectoryRow[]; initialQ?: string }) {
+export function FundsIndex({
+  funds,
+  initialQ = "",
+  embedded = false,
+}: {
+  funds: FundDirectoryRow[];
+  initialQ?: string;
+  embedded?: boolean;
+}) {
+  const router = useRouter();
   const [q, setQ] = useState(initialQ);
   const [category, setCategory] = useState("");
+  const skipUrl = useRef(true);
   const categories = useMemo(() => {
     return [...new Set(funds.map((f) => f.category).filter(Boolean))].sort((a, b) =>
       a.localeCompare(b, "en-IN"),
@@ -37,14 +49,25 @@ export function FundsIndex({ funds, initialQ = "" }: { funds: FundDirectoryRow[]
     return [...map.entries()];
   }, [filtered]);
 
+  useEffect(() => {
+    if (!embedded) return;
+    if (skipUrl.current) {
+      skipUrl.current = false;
+      return;
+    }
+    router.replace(fundsHubPath("all", q.trim() ? { q: q.trim() } : undefined), { scroll: false });
+  }, [embedded, q, router]);
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-medium">All mutual funds</h1>
-        <p className="mt-1 text-sm text-muted">
-          Active-equity Direct Growth families with a holdings book, grouped by fund house.
-        </p>
-      </div>
+      {embedded ? null : (
+        <div>
+          <h1 className="text-xl font-medium">All mutual funds</h1>
+          <p className="mt-1 text-sm text-muted">
+            Active-equity Direct Growth families with a holdings book, grouped by fund house.
+          </p>
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <input
           className="h-9 w-44 rounded border border-border bg-input px-2.5 text-sm sm:w-56"

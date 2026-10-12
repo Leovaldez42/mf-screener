@@ -4,14 +4,14 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { LoadError, TableSkeleton, UpdatingNote } from "@/components/load-ui";
-import { Delta, loadWatchlist, saveWatchlist } from "@/components/ui";
+import { Delta, NetBoughtLabel, loadWatchlist, saveWatchlist } from "@/components/ui";
 import type { ChaseRow } from "@/lib/types";
 
 const COLS = [
   { label: "Stock" },
   { label: "Sector", hide: "hidden sm:table-cell" },
   { label: "Funds" },
-  { label: "Net ₹ cr" },
+  { label: "Net bought (₹ cr)" },
   { label: "" },
 ];
 
@@ -120,7 +120,9 @@ function WatchlistInner() {
                 <th className="py-2 pr-3 font-normal">Stock</th>
                 <th className="hidden py-2 pr-3 font-normal sm:table-cell">Sector</th>
                 <th className="py-2 pr-3 font-normal">Funds</th>
-                <th className="py-2 pr-3 font-normal">Net ₹ cr</th>
+                <th className="py-2 pr-3 font-normal">
+                  <NetBoughtLabel />
+                </th>
                 <th className="py-2 font-normal" />
               </tr>
             </thead>

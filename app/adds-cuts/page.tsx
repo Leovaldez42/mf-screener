@@ -24,7 +24,7 @@ const EMPTY_ROWS: ChaseRow[] = [];
 
 const SKELETON_COLS = [
   { label: "Stock" },
-  { label: "Net ₹ cr" },
+  { label: "Net bought (₹ cr)" },
   { label: "Funds" },
   { label: "Sector", hide: "hidden sm:table-cell" },
   { label: "Net qty", hide: "hidden md:table-cell" },
@@ -54,7 +54,8 @@ function ChaseFallback() {
       <div>
         <h1 className="text-xl font-medium">Adds & cuts</h1>
         <p className="mt-1 text-sm text-muted">
-          Active equity funds only. Adds and cuts use share quantity, not weight. Use{" "}
+          Active equity funds only. Adds and cuts use share quantity, not weight. Net bought values
+          those share changes at month-end price and ignores price moves. Use{" "}
           <strong>Holdings as of</strong> in the header. Books lag month-end by about ten working
           days. Click a column header to sort. For the narrative cut, see{" "}
           <Link href="/reports" className="text-accent hover:underline">
@@ -247,7 +248,8 @@ function ChasePage() {
       <div>
         <h1 className="text-xl font-medium">Adds & cuts</h1>
         <p className="mt-1 text-sm text-muted">
-          Active equity funds only. Adds and cuts use share quantity, not weight. Use{" "}
+          Active equity funds only. Adds and cuts use share quantity, not weight. Net bought values
+          those share changes at month-end price and ignores price moves. Use{" "}
           <strong>Holdings as of</strong> in the header. Books lag month-end by about ten working
           days. Click a column header to sort. For the narrative cut, see{" "}
           <Link href={month ? `/reports/${month}` : "/reports"} className="text-accent hover:underline">

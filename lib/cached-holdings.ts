@@ -14,6 +14,8 @@ import {
 } from "@/lib/instruments";
 import type { ChaseRow } from "@/lib/types";
 
+export { holdingFlowCr } from "@/lib/holding-flow";
+
 async function loadMonthSnapshots(month: string): Promise<SnapshotLine[]> {
   const db = createAnonClient();
   const rows = await fetchAllRows<{
@@ -73,7 +75,7 @@ async function loadChaseRows(month: string): Promise<ChaseRow[]> {
   return (await getCanonicalBook(month)).chase;
 }
 
-export const getChaseRows = unstable_cache(loadChaseRows, ["chase-rows-equity-v7"], {
+export const getChaseRows = unstable_cache(loadChaseRows, ["chase-rows-equity-v8"], {
   revalidate: HOLDINGS_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS],
 });
@@ -91,7 +93,7 @@ async function loadChasePreview(month: string): Promise<{ inflows: ChaseRow[]; o
   return { inflows, outflows };
 }
 
-export const getChasePreview = unstable_cache(loadChasePreview, ["chase-preview", "equity-v7"], {
+export const getChasePreview = unstable_cache(loadChasePreview, ["chase-preview", "equity-v8"], {
   revalidate: HOLDINGS_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS],
 });
@@ -114,7 +116,7 @@ async function loadSectorRows(month: string) {
   };
 }
 
-export const getSectorRows = unstable_cache(loadSectorRows, ["sector-rows-equity-v7"], {
+export const getSectorRows = unstable_cache(loadSectorRows, ["sector-rows-equity-v8"], {
   revalidate: HOLDINGS_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS],
 });
@@ -242,6 +244,8 @@ async function loadStockPayload(id: string, requestedMonth: string) {
         weight_pct: d.weight_pct,
         market_value_cr: d.value_cr,
         qty_delta: d.qty_delta,
+        net_value_delta_cr: d.value_delta_cr,
+        mv_change_cr: d.mv_change_cr,
         weight_delta: d.weight_delta,
         event: d.event,
       };
@@ -254,18 +258,20 @@ async function loadStockPayload(id: string, requestedMonth: string) {
         fund_count_delta: chaseRow.fund_count_delta,
         net_qty_delta: chaseRow.net_qty_delta,
         net_value_delta_cr: chaseRow.net_value_delta_cr,
+        mv_change_cr: chaseRow.mv_change_cr ?? 0,
       }
     : {
         fund_count: holders.filter((h) => h.quantity > 0).length,
         fund_count_delta: 0,
         net_qty_delta: 0,
         net_value_delta_cr: 0,
+        mv_change_cr: 0,
       };
 
   return { stock, month: monthToUse, history, holders, summary };
 }
 
-export const getStockPayload = unstable_cache(loadStockPayload, ["stock-payload-v7"], {
+export const getStockPayload = unstable_cache(loadStockPayload, ["stock-payload-v8"], {
   revalidate: HOLDINGS_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS],
 });
@@ -320,6 +326,8 @@ async function loadFundPayload(familyId: number, requestedMonth: string) {
       market_value_cr: d.value_cr,
       weight_pct: d.weight_pct,
       qty_delta: d.qty_delta,
+      net_value_delta_cr: d.value_delta_cr,
+      mv_change_cr: d.mv_change_cr,
       weight_delta: d.weight_delta,
       event: d.event,
     }))
@@ -342,7 +350,7 @@ async function loadFundPayload(familyId: number, requestedMonth: string) {
   return { family, aum_cr, month: monthToUse, holdings, sectors, availableMonths };
 }
 
-export const getFundPayload = unstable_cache(loadFundPayload, ["fund-payload-equity-v7"], {
+export const getFundPayload = unstable_cache(loadFundPayload, ["fund-payload-equity-v8"], {
   revalidate: HOLDINGS_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS, CACHE_TAG_METRICS],
 });

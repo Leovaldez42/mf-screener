@@ -10,10 +10,10 @@ export const dynamic = "force-dynamic";
 const MAIN_PATHS = [
   "/",
   "/adds-cuts",
-  "/screener",
-  "/compare",
+  "/funds?tab=compare",
+  "/funds?tab=overlap",
+  "/funds?tab=all",
   "/sectors",
-  "/overlap",
   "/about",
   "/data",
   "/how-we-calculate",

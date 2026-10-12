@@ -72,6 +72,7 @@ export async function GET(req: NextRequest) {
           fund_count_delta: 0,
           net_qty_delta: 0,
           net_value_delta_cr: 0,
+          mv_change_cr: 0,
           median_weight_pct: null,
         });
       }

@@ -6,7 +6,7 @@ import { Suspense, useEffect, useLayoutEffect, useState } from "react";
 import { LoadError, Skeleton, TableSkeleton, UpdatingNote } from "@/components/load-ui";
 import { SectorPill } from "@/components/sector-pill";
 import { ShareBar } from "@/components/share-bar";
-import { Delta, loadWatchlist, saveWatchlist } from "@/components/ui";
+import { Delta, NetBoughtLabel, loadWatchlist, saveWatchlist } from "@/components/ui";
 import { formatMonthLabel, formatNumber } from "@/lib/format";
 import { sessionCacheGet, sessionCacheSet } from "@/lib/session-cache";
 import { stockShareCaption } from "@/lib/share-text";
@@ -23,6 +23,7 @@ type Payload = {
     quantity: number;
     weight_pct: number;
     qty_delta: number;
+    net_value_delta_cr?: number;
     event: string;
   }[];
   summary?: {
@@ -30,6 +31,7 @@ type Payload = {
     fund_count_delta: number;
     net_qty_delta: number;
     net_value_delta_cr: number;
+    mv_change_cr?: number;
   } | null;
   error?: string;
 };
@@ -150,6 +152,12 @@ function StockPage() {
           <p className="mt-1">
             <SectorPill sector={data.stock?.sector || "Unclassified"} />
           </p>
+          {data.summary ? (
+            <p className="mt-3 text-sm">
+              <NetBoughtLabel className="text-muted" />{" "}
+              <Delta value={data.summary.net_value_delta_cr} />
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center justify-end gap-3">
           {updating ? <UpdatingNote /> : null}
@@ -190,6 +198,9 @@ function StockPage() {
               <th className="py-2 pr-3 font-normal">Qty</th>
               <th className="py-2 pr-3 font-normal">Weight %</th>
               <th className="py-2 pr-3 font-normal">Δ qty</th>
+              <th className="py-2 pr-3 font-normal">
+                <NetBoughtLabel />
+              </th>
               <th className="py-2 font-normal">Event</th>
             </tr>
           </thead>
@@ -213,6 +224,9 @@ function StockPage() {
                 <td className="py-2 pr-3">{formatNumber(h.weight_pct)}</td>
                 <td className="py-2 pr-3">
                   <Delta value={h.qty_delta} />
+                </td>
+                <td className="py-2 pr-3">
+                  <Delta value={h.net_value_delta_cr ?? 0} />
                 </td>
                 <td className="py-2 text-muted">{h.event}</td>
               </tr>

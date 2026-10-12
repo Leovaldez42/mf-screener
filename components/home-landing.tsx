@@ -5,6 +5,7 @@ import { formatMonthEnd, formatMonthLabel, formatNumber } from "@/lib/format";
 import type { MonthlyReport, ReportSectorRow, ReportStockRow } from "@/lib/monthly-report";
 import { formatCoverage } from "@/lib/report-copy";
 import type { SearchSuggestion } from "@/lib/search";
+import { NET_BOUGHT_TOOLTIP } from "@/lib/holding-flow";
 import { formatSignedCr } from "@/lib/share-text";
 
 function rupeeCr(n: number) {
@@ -180,7 +181,9 @@ export function HomeLanding({
               <div className="mt-1 font-medium tabular-nums">{formatCoverage(s).replace(/ \(.+\)$/, "")}</div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-[0.12em] text-faint">Net equity buying</div>
+              <div className="text-[10px] uppercase tracking-[0.12em] text-faint" title={NET_BOUGHT_TOOLTIP}>
+                Net bought (₹ cr)
+              </div>
               <div className={`mt-1 font-medium tabular-nums ${net >= 0 ? "text-gain" : "text-loss"}`}>
                 {net >= 0 ? "+" : "−"}
                 {rupeeCr(net)}
@@ -204,7 +207,7 @@ export function HomeLanding({
             <div>
               <div className="mb-2 flex justify-between text-[10px] uppercase tracking-[0.12em] text-faint">
                 <span>Top buys</span>
-                <span>Net ₹ cr</span>
+                <span title={NET_BOUGHT_TOOLTIP}>Net bought (₹ cr)</span>
               </div>
               <ul className="space-y-2.5">
                 {buys.map((r) => (
@@ -222,7 +225,7 @@ export function HomeLanding({
             <div>
               <div className="mb-2 flex justify-between text-[10px] uppercase tracking-[0.12em] text-faint">
                 <span>Top sells</span>
-                <span>Net ₹ cr</span>
+                <span title={NET_BOUGHT_TOOLTIP}>Net bought (₹ cr)</span>
               </div>
               <ul className="space-y-2.5">
                 {sells.map((r) => (

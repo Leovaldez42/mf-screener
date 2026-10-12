@@ -1,16 +1,16 @@
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import Link from "next/link";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { SectorPill } from "@/components/sector-pill";
-import { Delta } from "@/components/ui";
+import { Delta, NetBoughtLabel } from "@/components/ui";
 import { formatNumber, sectorLabel } from "@/lib/format";
 import type { ChaseRow } from "@/lib/types";
 
 type SortKey = "display_name" | "sector" | "fund_count" | "net_qty_delta" | "net_value_delta_cr" | "median_weight_pct";
 
-const COLUMNS: { key: SortKey; label: string; hide: string }[] = [
+const COLUMNS: { key: SortKey; label: ReactNode; hide: string }[] = [
   { key: "display_name", label: "Stock", hide: "" },
-  { key: "net_value_delta_cr", label: "Net ₹ cr", hide: "" },
+  { key: "net_value_delta_cr", label: <NetBoughtLabel />, hide: "" },
   { key: "fund_count", label: "Funds", hide: "" },
   { key: "sector", label: "Sector", hide: "hidden sm:block" },
   { key: "net_qty_delta", label: "Net qty", hide: "hidden md:block" },
@@ -19,7 +19,7 @@ const COLUMNS: { key: SortKey; label: string; hide: string }[] = [
 
 const ROW_H = 40;
 const ROW_GRID =
-  "grid h-10 grid-cols-[minmax(0,1.4fr)_8.5rem_3rem_3.6rem] items-center gap-x-3 sm:grid-cols-[minmax(0,1.6fr)_8.5rem_3rem_minmax(0,7rem)_4.5rem_3.6rem] md:grid-cols-[minmax(0,1.6fr)_8.75rem_3.25rem_minmax(0,7rem)_minmax(0,8rem)_4.5rem_3.6rem]";
+  "grid h-10 grid-cols-[minmax(0,1.4fr)_10rem_3rem_3.6rem] items-center gap-x-3 sm:grid-cols-[minmax(0,1.6fr)_10rem_3rem_minmax(0,7rem)_4.5rem_3.6rem] md:grid-cols-[minmax(0,1.6fr)_10.5rem_3.25rem_minmax(0,7rem)_minmax(0,8rem)_4.5rem_3.6rem]";
 
 function stockHref(id: string, month: string) {
   return month ? `/stocks/${id}?month=${month}` : `/stocks/${id}`;

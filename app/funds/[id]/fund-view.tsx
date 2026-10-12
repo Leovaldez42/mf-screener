@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { DataAsOfNote, Delta, UnavailableMonthNote } from "@/components/ui";
+import { DataAsOfNote, Delta, NetBoughtLabel, UnavailableMonthNote } from "@/components/ui";
 import { FundSectorMap } from "@/components/fund-sector-map";
 import { formatMonthLabel, formatNumber } from "@/lib/format";
 import { instrumentSectorLabel, isCashLikeNonEquity, isEquityInstrument } from "@/lib/instruments";
@@ -17,6 +17,7 @@ type Holding = {
   market_value_cr: number;
   weight_pct: number;
   qty_delta: number;
+  net_value_delta_cr?: number;
   event: string;
 };
 
@@ -38,7 +39,7 @@ export type FundViewPayload = {
   empty?: boolean;
 };
 
-type SortKey = "display_name" | "sector" | "weight_pct" | "market_value_cr" | "qty_delta" | "event";
+type SortKey = "display_name" | "sector" | "weight_pct" | "market_value_cr" | "qty_delta" | "net_value_delta_cr" | "event";
 
 const COLUMNS: { key: SortKey; label: string }[] = [
   { key: "display_name", label: "Stock" },
@@ -46,6 +47,7 @@ const COLUMNS: { key: SortKey; label: string }[] = [
   { key: "weight_pct", label: "Weight %" },
   { key: "market_value_cr", label: "₹ cr" },
   { key: "qty_delta", label: "Δ qty" },
+  { key: "net_value_delta_cr", label: "Net bought (₹ cr)" },
   { key: "event", label: "Event" },
 ];
 
@@ -53,6 +55,7 @@ function sortValue(row: Holding, key: SortKey): string | number {
   if (key === "display_name") return row.display_name.toLowerCase();
   if (key === "sector") return holdingSectorLabel(row).toLowerCase();
   if (key === "event") return row.event.toLowerCase();
+  if (key === "net_value_delta_cr") return row.net_value_delta_cr ?? 0;
   return row[key];
 }
 
@@ -112,9 +115,14 @@ export function FundView({
       <div>
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h1 className="text-xl font-medium">{data.family?.name}</h1>
-          <Link className="text-sm text-muted underline hover:text-foreground" href={`/overlap?funds=${fundId}`}>
-            Check overlap
-          </Link>
+          <div className="flex flex-wrap gap-3 text-sm">
+            <Link className="text-muted underline hover:text-foreground" href={`/funds?tab=compare&funds=${fundId}`}>
+              Compare
+            </Link>
+            <Link className="text-muted underline hover:text-foreground" href={`/funds?tab=overlap&funds=${fundId}`}>
+              Check overlap
+            </Link>
+          </div>
         </div>
         <p className="text-sm text-muted">
           {data.family?.amc_slug} · {data.family?.sebi_category}
@@ -170,7 +178,7 @@ export function FundView({
                       className="inline-flex items-center gap-1 hover:text-foreground"
                       onClick={() => onSort(column.key)}
                     >
-                      {column.label}
+                      {column.key === "net_value_delta_cr" ? <NetBoughtLabel /> : column.label}
                       <span className={isActive ? "text-foreground" : "text-faint"}>{arrow}</span>
                     </button>
                   </th>
@@ -193,6 +201,9 @@ export function FundView({
                 <td className="py-2 pr-3">{formatNumber(h.market_value_cr)}</td>
                 <td className="py-2 pr-3">
                   <Delta value={h.qty_delta} />
+                </td>
+                <td className="py-2 pr-3">
+                  <Delta value={h.net_value_delta_cr ?? 0} />
                 </td>
                 <td className="py-2 text-muted">{h.event}</td>
               </tr>
