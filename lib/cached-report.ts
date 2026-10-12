@@ -73,12 +73,12 @@ async function loadMonthlyReport(month: string): Promise<MonthlyReport> {
   });
 }
 
-const getMonthlyReportLatest = unstable_cache(loadMonthlyReport, ["monthly-report-v4-latest"], {
+const getMonthlyReportLatest = unstable_cache(loadMonthlyReport, ["monthly-report-v5-latest"], {
   revalidate: HOLDINGS_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS],
 });
 
-const getMonthlyReportArchive = unstable_cache(loadMonthlyReport, ["monthly-report-v4-archive"], {
+const getMonthlyReportArchive = unstable_cache(loadMonthlyReport, ["monthly-report-v5-archive"], {
   revalidate: ARCHIVE_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS],
 });

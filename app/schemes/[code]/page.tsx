@@ -109,7 +109,7 @@ export default async function SchemePage({ params }: Props) {
         ) : (
           <>Adds & cuts books are only for active-equity schemes. </>
         )}
-        <Link className="underline" href="/screener">
+        <Link className="underline" href="/funds">
           Back to screener
         </Link>
       </p>

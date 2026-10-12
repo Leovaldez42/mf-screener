@@ -122,7 +122,7 @@ export function reportHeroOgImage(report: MonthlyReport) {
           {[
             { label: "Funds covered", value: formatNumber(s.fundsCovered, 0) },
             { label: "Fund houses", value: `${s.fundHousesCoveragePct}%` },
-            { label: "Net equity", value: formatSignedCr(s.totalNetEquityBuyingCr, 0) },
+            { label: "Net bought", value: formatSignedCr(s.totalNetEquityBuyingCr, 0) },
           ].map((c) => (
             <div
               key={c.label}

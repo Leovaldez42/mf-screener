@@ -143,5 +143,24 @@ describe("computeCanonicalBook", () => {
     assert.equal(row.fund_count, 1);
     assert.equal(book.deltas[0].event, "hold");
     assert.equal(book.deltas[0].value_delta_cr, 0);
+    assert.equal(book.deltas[0].mv_change_cr, 15);
+  });
+
+  it("counts flow 0 when price doubles and the fund buys nothing", () => {
+    const prior = [line(1, "et", "Eternal Limited", 100, { market_value_cr: 10 })];
+    const current = [line(1, "et", "Eternal Limited", 100, { market_value_cr: 20 })];
+    const book = computeCanonicalBook("2026-08", current, prior);
+    assert.equal(book.chase[0].net_value_delta_cr, 0);
+    assert.equal(book.chase[0].mv_change_cr, 10);
+  });
+
+  it("counts negative flow when the fund sells 10 shares even if market value rose", () => {
+    const prior = [line(1, "et", "Eternal Limited", 100, { market_value_cr: 10 })];
+    const current = [line(1, "et", "Eternal Limited", 90, { market_value_cr: 12 })];
+    const book = computeCanonicalBook("2026-08", current, prior);
+    const flow = book.chase[0].net_value_delta_cr;
+    assert.ok(flow < 0);
+    assert.ok(Math.abs(flow - (-10 * 12) / 90) < 1e-9);
+    assert.ok((book.chase[0].mv_change_cr ?? 0) > 0);
   });
 });

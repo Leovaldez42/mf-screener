@@ -8,6 +8,7 @@ export type ChaseRow = {
   fund_count_delta: number;
   net_qty_delta: number;
   net_value_delta_cr: number;
+  mv_change_cr?: number;
   median_weight_pct: number | null;
 };
 

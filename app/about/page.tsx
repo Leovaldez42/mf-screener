@@ -49,11 +49,11 @@ export default function AboutPage() {
             — stocks funds bought more of or sold between monthly portfolio books, by share count.
           </li>
           <li>
-            <Link className="text-foreground underline" href="/screener">
+            <Link className="text-foreground underline" href="/funds">
               Screener
             </Link>{" "}
             and{" "}
-            <Link className="text-foreground underline" href="/compare">
+            <Link className="text-foreground underline" href="/funds?tab=compare">
               Compare
             </Link>{" "}
             — Direct Growth plans by class (active equity, index, debt, hybrid, other), with Sharpe, TER, PE, and CAGR.

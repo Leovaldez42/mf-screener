@@ -466,6 +466,17 @@ export function Delta({
   );
 }
 
+export function NetBoughtLabel({ className = "" }: { className?: string }) {
+  return (
+    <span
+      className={className}
+      title="Shares bought minus shares sold, valued at month-end price. Excludes price moves."
+    >
+      Net bought (₹ cr)
+    </span>
+  );
+}
+
 export const WATCHLIST_KEY = "mf-chase-watchlist";
 export const COMPARE_KEY = "mf-chase-compare";
 
