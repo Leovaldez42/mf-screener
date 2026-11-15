@@ -755,7 +755,7 @@ async function main() {
       })
       .eq("id", run.id);
     console.log(`done status=${status} ok=${familiesOk} fail=${familiesFail}`);
-    if (status !== "failed") await notifyRevalidate("holdings");
+    if (status !== "failed" && process.env.INGEST_SKIP_REVALIDATE !== "1") await notifyRevalidate("holdings");
   } catch (err) {
     await db
       .from("ingest_runs")

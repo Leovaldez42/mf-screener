@@ -4,7 +4,7 @@ import { isYearMonth } from "@/lib/site";
 import { supabaseConfigured } from "@/lib/supabase";
 
 export const runtime = "nodejs";
-export const revalidate = 3600;
+export const revalidate = 2592000;
 
 export async function GET(
   request: Request,

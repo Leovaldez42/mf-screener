@@ -155,11 +155,6 @@ export function ScreenerTab({ initialSearch }: { initialSearch: string }) {
   }, [query, reload]);
 
   useEffect(() => {
-    const totalPages = Math.max(1, Math.ceil(schemes.length / PAGE_SIZE));
-    if (page > totalPages) setPage(totalPages);
-  }, [schemes.length, page]);
-
-  useEffect(() => {
     if (skipUrl.current) {
       skipUrl.current = false;
       return;
@@ -226,6 +221,7 @@ export function ScreenerTab({ initialSearch }: { initialSearch: string }) {
   const strip = !searching && styleIds.length && styleAverage ? styleAverage : null;
   const total = schemes.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if (page > totalPages) setPage(totalPages);
   const pageRows = schemes.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const from = total ? (page - 1) * PAGE_SIZE + 1 : 0;
   const to = Math.min(page * PAGE_SIZE, total);
@@ -374,7 +370,7 @@ export function ScreenerTab({ initialSearch }: { initialSearch: string }) {
         ) : null}
         {schemes.length > 0 ? (
           <div className="-mx-px overflow-x-auto">
-            <table className="w-full min-w-[52rem] text-sm">
+            <table className="w-full min-w-208 text-sm">
               <thead className="text-muted">
                 <tr className="border-t border-border">
                   <th className="w-10 px-3 py-2 font-normal" />

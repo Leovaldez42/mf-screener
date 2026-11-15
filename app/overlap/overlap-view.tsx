@@ -84,11 +84,11 @@ export function OverlapView({
   const [wantThird, setWantThird] = useState(false);
 
   useEffect(() => {
-    if (focusPicker) queueMicrotask(() => inputRefs[1].current?.focus());
+    if (focusPicker) queueMicrotask(() => inputB.current?.focus());
   }, [focusPicker]);
 
   useEffect(() => {
-    const funds = codes.join(",");
+    const funds = parseFunds(fundsParam).join(",");
     const ac = new AbortController();
     const qs = new URLSearchParams();
     if (funds) qs.set("funds", funds);

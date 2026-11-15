@@ -42,7 +42,7 @@ npm run dev              # http://localhost:3000
 
 Metrics before holdings. First ingest takes a while.
 
-After each monthly holdings load, run **`npm run snapshots`**. That writes `report_snapshot`, `fund_snapshot`, `stock_snapshot`, and `site_snapshot` in Supabase, plus `public/search-index.json`. Pages and holdings APIs read those rows; they do not recompute month-on-month at request time. Apply [`supabase/migrations/20261017000000_monthly_snapshots.sql`](supabase/migrations/20261017000000_monthly_snapshots.sql) once before the first snapshot run. Optional: `SNAPSHOT_MONTH=2026-08 npm run snapshots` to rebuild one month.
+Each month, once AMC books are out, run **`npm run refresh`**. It re-fetches the latest month and the one before it, then runs `npm run snapshots`, which writes `report_snapshot`, `fund_snapshot`, `stock_snapshot`, and `site_snapshot` in Supabase plus `public/search-index.json`, and finally revalidates the `holdings` cache tag. Pages and holdings APIs read those rows; they do not recompute month-on-month at request time. Holdings pages revalidate every 30 days as a backstop, so the tag call is what makes new data show up: set `APP_URL` to the deployed site and the same `REVALIDATE_SECRET` locally and on Vercel. Apply [`supabase/migrations/20261017000000_monthly_snapshots.sql`](supabase/migrations/20261017000000_monthly_snapshots.sql) once before the first snapshot run. If a page logs `[snapshot] … missing; computing live`, snapshots are stale or missing for that month.
 
 ## Deploy
 

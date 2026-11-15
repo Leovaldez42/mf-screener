@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getFundDirectory } from "@/lib/directory";
 import { getOverlapSuggestions } from "@/lib/cached-overlap";
@@ -5,9 +6,9 @@ import { pageMetadata } from "@/lib/page-meta";
 import { supabaseConfigured } from "@/lib/supabase";
 import { FundsHub } from "./funds-hub";
 
-export const revalidate = 86400;
+export const revalidate = 2592000;
 
-export const metadata = pageMetadata({
+export const metadata: Metadata = pageMetadata({
   title: "Mutual fund screener · Thinkbrew",
   description:
     "Screen Indian Direct Growth mutual funds by category, fund house, returns, and expense ratio. Not investment advice.",

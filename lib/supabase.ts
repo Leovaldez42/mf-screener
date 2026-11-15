@@ -39,9 +39,15 @@ export async function fetchAllRows<T>(
   concurrency = 6,
 ): Promise<T[]> {
   const fetchPage = async (from: number) => {
-    const { data, error } = await makeQuery().range(from, from + page - 1);
-    if (error) throw new Error(error.message);
-    return data || [];
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const { data, error } = await makeQuery().range(from, from + page - 1);
+      if (!error) return data || [];
+      const timeout = /statement timeout|canceling statement/i.test(error.message);
+      if (!timeout || attempt === 4) throw new Error(error.message);
+      console.warn(`[supabase] page ${from} timed out, retry ${attempt + 1}`);
+      await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+    }
+    return [];
   };
   const out: T[] = [];
   const first = await fetchPage(0);

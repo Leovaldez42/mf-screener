@@ -36,16 +36,24 @@ function monthLookback(end: string, count: number): string[] {
 export async function queryCompleteMonthsFromHoldings(): Promise<string[]> {
   const db = createAnonClient();
   const candidates = monthLookback(lastCompletedYyyyMm(), LOOKBACK_MONTHS);
-  const counts = await Promise.all(
-    candidates.map(async (month) => {
-      const { count, error } = await db
-        .from("holdings_snapshots")
-        .select("month", { count: "exact", head: true })
-        .eq("month", month);
-      if (error) throw new Error(error.message || "holdings_month_count_failed");
-      return { month, count: count ?? 0 };
-    }),
-  );
+  const counts: { month: string; count: number }[] = [];
+  for (let i = 0; i < candidates.length; i += 4) {
+    const batch = await Promise.all(
+      candidates.slice(i, i + 4).map(async (month) => {
+        for (let attempt = 0; attempt < 4; attempt++) {
+          const { count, error } = await db
+            .from("holdings_snapshots")
+            .select("month", { count: "exact", head: true })
+            .eq("month", month);
+          if (!error) return { month, count: count ?? 0 };
+          if (attempt === 3) throw new Error(error.message || "holdings_month_count_failed");
+          await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+        }
+        return { month, count: 0 };
+      }),
+    );
+    counts.push(...batch);
+  }
   return counts.filter((row) => row.count > 0).map((row) => row.month);
 }
 

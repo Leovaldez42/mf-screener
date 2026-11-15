@@ -12,7 +12,7 @@ const geistSans = Geist({
   subsets: ["latin"],
 });
 
-export const revalidate = 86400;
+export const revalidate = 2592000;
 
 export const viewport: Viewport = {
   width: "device-width",

@@ -33,6 +33,9 @@ export async function loadMonthSnapshots(month: string): Promise<SnapshotLine[]>
       .eq("month", month)
       .order("family_id")
       .order("stock_id"),
+    500,
+    500000,
+    1,
   );
   const out: SnapshotLine[] = [];
   for (const row of rows) {
@@ -75,9 +78,10 @@ export function getCanonicalBook(month: string) {
 }
 
 async function loadChaseBook(month: string): Promise<{ chase: ChaseRow[]; excludedNoPriorMonth: number }> {
-  const { getReportSnapshot } = await import("@/lib/snapshot-read");
+  const { getReportSnapshot, noteLiveFallback } = await import("@/lib/snapshot-read");
   const snap = await getReportSnapshot(month);
   if (snap) return { chase: snap.chase, excludedNoPriorMonth: snap.excludedNoPriorMonth };
+  noteLiveFallback("chase", month);
   const book = await getCanonicalBook(month);
   return { chase: book.chase, excludedNoPriorMonth: book.excludedNoPriorMonth };
 }
@@ -110,11 +114,12 @@ export const getChasePreview = unstable_cache(loadChasePreview, ["chase-preview"
 });
 
 async function loadSectorRows(month: string) {
-  const { getReportSnapshot } = await import("@/lib/snapshot-read");
+  const { getReportSnapshot, noteLiveFallback } = await import("@/lib/snapshot-read");
   const snap = await getReportSnapshot(month);
   if (snap) {
     return { excludedNoPriorMonth: snap.excludedNoPriorMonth, rows: snap.sectors };
   }
+  noteLiveFallback("sectors", month);
   const book = await getCanonicalBook(month);
   const map = new Map<string, { net_value_delta_cr: number; net_qty_delta: number }>();
   for (const d of book.deltas) {
@@ -448,7 +453,7 @@ export const getFundPayloadLive = unstable_cache(liveLoadFundPayload, ["fund-pay
 });
 
 export async function getFundPayload(familyId: number, requestedMonth: string) {
-  const { getFundSnapshot, getLatestFundSnapshot } = await import("@/lib/snapshot-read");
+  const { getFundSnapshot, getLatestFundSnapshot, noteLiveFallback } = await import("@/lib/snapshot-read");
   if (requestedMonth) {
     const hit = await getFundSnapshot(familyId, requestedMonth);
     if (hit) return hit as Awaited<ReturnType<typeof liveLoadFundPayload>>;
@@ -456,11 +461,12 @@ export async function getFundPayload(familyId: number, requestedMonth: string) {
     const latest = await getLatestFundSnapshot(familyId);
     if (latest) return latest.payload as Awaited<ReturnType<typeof liveLoadFundPayload>>;
   }
+  noteLiveFallback("fund", familyId);
   return getFundPayloadLive(familyId, requestedMonth);
 }
 
 export async function getStockPayload(id: string, requestedMonth: string) {
-  const { getStockSnapshot, getLatestStockSnapshot } = await import("@/lib/snapshot-read");
+  const { getStockSnapshot, getLatestStockSnapshot, noteLiveFallback } = await import("@/lib/snapshot-read");
   if (requestedMonth) {
     const hit = await getStockSnapshot(id, requestedMonth);
     if (hit) return hit as Awaited<ReturnType<typeof liveLoadStockPayload>>;
@@ -468,5 +474,6 @@ export async function getStockPayload(id: string, requestedMonth: string) {
     const latest = await getLatestStockSnapshot(id);
     if (latest) return latest.payload as Awaited<ReturnType<typeof liveLoadStockPayload>>;
   }
+  noteLiveFallback("stock", id);
   return getStockPayloadLive(id, requestedMonth);
 }

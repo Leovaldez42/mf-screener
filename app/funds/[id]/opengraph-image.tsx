@@ -6,7 +6,7 @@ import { getSiteMeta } from "@/lib/snapshot-read";
 import { supabaseConfigured } from "@/lib/supabase";
 
 export const runtime = "nodejs";
-export const revalidate = 86400;
+export const revalidate = 2592000;
 export const dynamicParams = true;
 export const alt = "Fund holdings";
 export const size = OG_SIZE;

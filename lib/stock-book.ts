@@ -49,14 +49,20 @@ export async function loadAliasCandidates(db: SupabaseClient, id: string): Promi
 }
 
 /** Every fund with a disclosed book in `month`. One row per fund, not per holding. */
-export async function queryMonthFamilyIds(db: SupabaseClient, month: string): Promise<number[]> {
+export async function queryMonthFamilyIds(db: SupabaseClient, month: string, attempt = 0): Promise<number[]> {
   const { data, error } = await db
     .from("families")
     .select("id, holdings_snapshots!inner(month)")
     .eq("holdings_snapshots.month", month)
     .limit(1, { referencedTable: "holdings_snapshots" })
     .limit(10000);
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (attempt < 4 && /statement timeout|canceling statement/i.test(error.message)) {
+      await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+      return queryMonthFamilyIds(db, month, attempt + 1);
+    }
+    throw new Error(error.message);
+  }
   return (data || []).map((r) => Number(r.id));
 }
 

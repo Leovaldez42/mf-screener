@@ -6,7 +6,7 @@ import { SITE_URL } from "@/lib/site";
 import { getSiteMeta } from "@/lib/snapshot-read";
 import { supabaseConfigured } from "@/lib/supabase";
 
-export const revalidate = 86400;
+export const revalidate = 2592000;
 
 const MAIN_PATHS = [
   "/",

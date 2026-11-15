@@ -3,7 +3,7 @@ import { getSectorRows, requireHoldingsMonth } from "@/lib/cached-holdings";
 import { HOLDINGS_CACHE_CONTROL, jsonCached, jsonNoStore } from "@/lib/http-cache";
 import { supabaseConfigured } from "@/lib/supabase";
 
-export const revalidate = 86400;
+export const revalidate = 2592000;
 
 export async function GET(req: NextRequest) {
   if (!supabaseConfigured()) {

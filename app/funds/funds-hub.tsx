@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { OverlapView } from "@/app/overlap/overlap-view";
 import type { FundDirectoryRow } from "@/lib/directory";
 import { FUNDS_TABS, fundsHubPath, parseFundsTab, pickTabParams, type FundsTab } from "@/lib/funds-hub";
@@ -39,17 +39,16 @@ export function FundsHub({
   const pathname = usePathname();
   const search = useSearchParams();
   const tab = parseFundsTab(search.get("tab") || tabProp);
+  const currentQs = pickTabParams(tab, search).toString();
   const [stored, setStored] = useState<Record<FundsTab, string>>(() => ({
     screener: pickTabParams("screener", search).toString(),
     compare: pickTabParams("compare", search).toString(),
     overlap: pickTabParams("overlap", search).toString(),
     all: pickTabParams("all", search).toString(),
   }));
-
-  useEffect(() => {
-    const qs = pickTabParams(tab, search).toString();
-    setStored((prev) => (prev[tab] === qs ? prev : { ...prev, [tab]: qs }));
-  }, [search, tab]);
+  if (stored[tab] !== currentQs) {
+    setStored((prev) => ({ ...prev, [tab]: currentQs }));
+  }
 
   const tabHrefs = useMemo(() => {
     const out = {} as Record<FundsTab, string>;

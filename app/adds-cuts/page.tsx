@@ -3,7 +3,7 @@ import { getReportSnapshot, getSiteMeta } from "@/lib/snapshot-read";
 import { supabaseConfigured } from "@/lib/supabase";
 import { AddsCutsView } from "./adds-cuts-view";
 
-export const revalidate = 86400;
+export const revalidate = 2592000;
 
 export default async function AddsCutsPage() {
   if (!supabaseConfigured()) {

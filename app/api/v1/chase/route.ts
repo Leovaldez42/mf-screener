@@ -5,7 +5,7 @@ import { instrumentSectorLabel, isEquityInstrument } from "@/lib/instruments";
 import { createAnonClient, supabaseConfigured } from "@/lib/supabase";
 import type { ChaseRow } from "@/lib/types";
 
-export const revalidate = 86400;
+export const revalidate = 2592000;
 
 export async function GET(req: NextRequest) {
   if (!supabaseConfigured()) {

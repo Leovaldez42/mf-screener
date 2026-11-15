@@ -5,7 +5,7 @@ import { isYearMonth } from "@/lib/site";
 import { supabaseConfigured } from "@/lib/supabase";
 
 export const runtime = "nodejs";
-export const revalidate = 3600;
+export const revalidate = 2592000;
 
 const SECTIONS = ["mostBought", "mostSold", "conviction", "sectors"] as const;
 type Section = (typeof SECTIONS)[number];

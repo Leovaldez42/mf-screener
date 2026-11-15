@@ -6,7 +6,7 @@ import { listCompleteMonths } from "@/lib/holdings-month";
 import { getSiteMeta } from "@/lib/snapshot-read";
 import { supabaseConfigured } from "@/lib/supabase";
 
-export const revalidate = 86400;
+export const revalidate = 2592000;
 
 export const metadata: Metadata = pageMetadata({
   title: "What fund managers bought · Thinkbrew",

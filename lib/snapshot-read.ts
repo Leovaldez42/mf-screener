@@ -29,6 +29,17 @@ export type SiteMetaSnapshot = {
   searchIndex: SearchIndex;
 };
 
+const warnedFallbacks = new Set<string>();
+
+/** A snapshot miss means a page is rebuilding a full month book from holdings. Log it once per key. */
+export function noteLiveFallback(kind: string, key: string | number) {
+  if (process.env.SNAPSHOT_BUILD === "1") return;
+  const id = `${kind}:${key}`;
+  if (warnedFallbacks.has(id)) return;
+  warnedFallbacks.add(id);
+  console.warn(`[snapshot] ${id} missing; computing live. Run npm run snapshots.`);
+}
+
 function missingSnapshotTable(error: { message?: string; code?: string } | null): boolean {
   const msg = error?.message || "";
   return /could not find the table|schema cache|does not exist/i.test(msg) || error?.code === "PGRST205";
@@ -44,7 +55,7 @@ async function loadSiteMeta(): Promise<SiteMetaSnapshot | null> {
   return (data?.payload as SiteMetaSnapshot) || null;
 }
 
-export const getSiteMeta = unstable_cache(loadSiteMeta, ["site-meta-v1"], {
+export const getSiteMeta = unstable_cache(loadSiteMeta, ["site-meta-v2"], {
   revalidate: PAGE_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS],
 });
@@ -59,7 +70,7 @@ async function loadReportSnapshot(month: string): Promise<ReportSnapshotPayload 
   return (data?.payload as ReportSnapshotPayload) || null;
 }
 
-export const getReportSnapshot = unstable_cache(loadReportSnapshot, ["report-snapshot-v1"], {
+export const getReportSnapshot = unstable_cache(loadReportSnapshot, ["report-snapshot-v2"], {
   revalidate: PAGE_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS],
 });
@@ -79,7 +90,7 @@ async function loadFundSnapshot(familyId: number, month: string) {
   return data?.payload ?? null;
 }
 
-export const getFundSnapshot = unstable_cache(loadFundSnapshot, ["fund-snapshot-v1"], {
+export const getFundSnapshot = unstable_cache(loadFundSnapshot, ["fund-snapshot-v2"], {
   revalidate: PAGE_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS],
 });
@@ -100,7 +111,7 @@ async function loadLatestFundSnapshot(familyId: number) {
   return data ? { month: String(data.month), payload: data.payload } : null;
 }
 
-export const getLatestFundSnapshot = unstable_cache(loadLatestFundSnapshot, ["fund-snapshot-latest-v1"], {
+export const getLatestFundSnapshot = unstable_cache(loadLatestFundSnapshot, ["fund-snapshot-latest-v2"], {
   revalidate: PAGE_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS],
 });
@@ -120,7 +131,7 @@ async function loadStockSnapshot(stockId: string, month: string) {
   return data?.payload ?? null;
 }
 
-export const getStockSnapshot = unstable_cache(loadStockSnapshot, ["stock-snapshot-v1"], {
+export const getStockSnapshot = unstable_cache(loadStockSnapshot, ["stock-snapshot-v2"], {
   revalidate: PAGE_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS],
 });
@@ -141,7 +152,7 @@ async function loadLatestStockSnapshot(stockId: string) {
   return data ? { month: String(data.month), payload: data.payload } : null;
 }
 
-export const getLatestStockSnapshot = unstable_cache(loadLatestStockSnapshot, ["stock-snapshot-latest-v1"], {
+export const getLatestStockSnapshot = unstable_cache(loadLatestStockSnapshot, ["stock-snapshot-latest-v2"], {
   revalidate: PAGE_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS],
 });
