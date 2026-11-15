@@ -558,3 +558,21 @@ export function buildMonthlyReport(input: MonthlyReportInput): MonthlyReport {
     amcBigBets,
   };
 }
+
+/** What the report page renders. Drops lists and per-fund detail the story never shows. */
+export function reportForStory(report: MonthlyReport): MonthlyReport {
+  const withFunds = (r: ReportStockRow): ReportStockRow => ({ ...r, examples: [] });
+  const bare = (r: ReportStockRow): ReportStockRow => ({ ...r, examples: [], adding: [], cutting: [] });
+  return {
+    ...report,
+    mostBought: [],
+    mostSold: [],
+    convictionBuys: [],
+    topNetBuys: report.topNetBuys.map(withFunds),
+    topNetSells: report.topNetSells.map(withFunds),
+    moneyWentByFunds: report.moneyWentByFunds.map(withFunds),
+    moneyLeftByFunds: report.moneyLeftByFunds.map(withFunds),
+    freshEntries: report.freshEntries.map(bare),
+    fullExits: report.fullExits.map(bare),
+  };
+}

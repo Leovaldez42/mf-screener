@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { pageMetadata } from "@/lib/page-meta";
 import { createAnonClient, supabaseConfigured } from "@/lib/supabase";
 
-export const revalidate = 86400;
+export const revalidate = 2592000;
 
 export const metadata: Metadata = pageMetadata({
   title: "Data · Thinkbrew",

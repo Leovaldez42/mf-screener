@@ -5,7 +5,7 @@ import { OG_SIZE } from "@/lib/site";
 import { supabaseConfigured } from "@/lib/supabase";
 
 export const runtime = "nodejs";
-export const revalidate = 86400;
+export const revalidate = 2592000;
 export const alt = "Thinkbrew";
 export const size = OG_SIZE;
 export const contentType = "image/png";

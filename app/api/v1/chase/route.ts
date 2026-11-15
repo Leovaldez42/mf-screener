@@ -1,11 +1,11 @@
 import { NextRequest } from "next/server";
-import { getCanonicalBook, requireHoldingsMonth } from "@/lib/cached-holdings";
+import { getChaseBook, requireHoldingsMonth } from "@/lib/cached-holdings";
 import { HOLDINGS_CACHE_CONTROL, SNAPSHOT_CACHE_CONTROL, jsonCached, jsonNoStore } from "@/lib/http-cache";
 import { instrumentSectorLabel, isEquityInstrument } from "@/lib/instruments";
 import { createAnonClient, supabaseConfigured } from "@/lib/supabase";
 import type { ChaseRow } from "@/lib/types";
 
-export const revalidate = 86400;
+export const revalidate = 2592000;
 
 export async function GET(req: NextRequest) {
   if (!supabaseConfigured()) {
@@ -36,14 +36,14 @@ export async function GET(req: NextRequest) {
       return jsonCached({ month: null, rows: [] as ChaseRow[], excludedNoPriorMonth: 0 }, SNAPSHOT_CACHE_CONTROL);
     }
     monthToUse = picked.month;
-    const book = await getCanonicalBook(monthToUse);
+    const book = await getChaseBook(monthToUse);
     data = book.chase;
     excludedNoPriorMonth = book.excludedNoPriorMonth;
   } catch (e) {
     return jsonNoStore({ error: e instanceof Error ? e.message : "chase_failed" }, 500);
   }
 
-  let rows = data;
+  let rows = [...data];
   if (sector) {
     rows = rows.filter((r) => (r.sector || "").toLowerCase() === sector.toLowerCase());
   }

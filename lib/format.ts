@@ -89,7 +89,7 @@ export function isJunkSector(sector: string | null | undefined): boolean {
 
 /** Trim, collapse space, drop junk. Does not rewrite FinAPI classification spelling. */
 export function canonicalizeSector(raw: string): string {
-  const s = (raw || "").trim().replace(/\s+/g, " ");
+  const s = (raw || "").replace(/\s*#+\s*$/, "").trim().replace(/\s+/g, " ");
   if (!s || isJunkSector(s)) return "";
   return s;
 }

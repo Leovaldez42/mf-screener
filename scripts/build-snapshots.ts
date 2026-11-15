@@ -1,6 +1,6 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { getHoldingsCoverage, loadCanonicalBook } from "../lib/cached-holdings";
+import { loadCanonicalBook } from "../lib/cached-holdings";
 import { loadOverlapSuggestions } from "../lib/cached-overlap";
 import { getDataFreshness } from "../lib/data-freshness";
 import { getFundDirectory, getStockDirectory } from "../lib/directory";
@@ -14,6 +14,7 @@ import {
   stockPayloadFromBook,
   topIds,
 } from "../lib/snapshot-build";
+import { notifyRevalidate } from "../lib/notify-revalidate";
 import { SITE_META_KEY } from "../lib/snapshot-read";
 import { createAnonClient, createServiceClient, fetchAllRows } from "../lib/supabase";
 
@@ -22,7 +23,7 @@ process.env.SNAPSHOT_BUILD = "1";
 function loadEnv() {
   for (const file of [".env.local", ".env"]) {
     try {
-      const text = require("node:fs").readFileSync(resolve(process.cwd(), file), "utf8") as string;
+      const text = readFileSync(resolve(process.cwd(), file), "utf8");
       for (const line of text.split("\n")) {
         const trimmed = line.trim();
         if (!trimmed || trimmed.startsWith("#")) continue;
@@ -64,8 +65,21 @@ async function upsertChunks<T extends Record<string, unknown>>(
   }
 }
 
+function coverageFor(month: string, familyIds: number[], families: FamilyRow[]) {
+  const haveFamilies = new Set(familyIds);
+  const amcOf = (slug: string | null) => (slug || "").trim().toLowerCase();
+  const totalAmcs = new Set(families.map((f) => amcOf(f.amc_slug)).filter(Boolean));
+  const haveAmcs = new Set(
+    families.filter((f) => haveFamilies.has(Number(f.id))).map((f) => amcOf(f.amc_slug)).filter(Boolean),
+  );
+  const total = totalAmcs.size || families.length;
+  const have = haveAmcs.size;
+  return { month, have, total, pct: total > 0 ? Math.round((have / total) * 100) : 100 };
+}
+
 async function main() {
   const only = (process.env.SNAPSHOT_MONTH || "").trim();
+  const siteOnly = process.env.SNAPSHOT_SITE_ONLY === "1";
   const db = createServiceClient();
   const anon = createAnonClient();
   const monthsAll = await queryCompleteMonthsFromHoldings();
@@ -77,11 +91,14 @@ async function main() {
 
   const [families, amcs, metrics] = await Promise.all([
     fetchAllRows<FamilyRow>(() =>
-      anon.from("families").select("id, name, amc_slug, sebi_category, is_active_equity, has_holdings, latest_month"),
+      anon
+        .from("families")
+        .select("id, name, amc_slug, sebi_category, is_active_equity, has_holdings, latest_month")
+        .order("id"),
     ),
-    fetchAllRows<{ slug: string; name: string }>(() => anon.from("amcs").select("slug, name")),
+    fetchAllRows<{ slug: string; name: string }>(() => anon.from("amcs").select("slug, name").order("slug")),
     fetchAllRows<{ scheme_code: string; aum_cr: number | null }>(() =>
-      anon.from("scheme_metrics").select("scheme_code, aum_cr"),
+      anon.from("scheme_metrics").select("scheme_code, aum_cr").order("scheme_code"),
     ),
   ]);
   const familyById = new Map(families.map((f) => [Number(f.id), f]));
@@ -107,9 +124,22 @@ async function main() {
 
   type ReportSnapshotWait = ReturnType<typeof reportArtifactsFromBook>["report"];
 
-  for (const month of months) {
+  if (siteOnly) {
+    const saved = await fetchAllRows<{ month: string; payload: { report: ReportSnapshotWait } }>(() =>
+      db.from("report_snapshot").select("month, payload").order("month", { ascending: false }),
+    );
+    const byMonth = new Map(saved.map((row) => [row.month, row.payload.report]));
+    for (const month of months) {
+      const report = byMonth.get(month);
+      if (report) reports.push({ month, report });
+    }
+    console.log(`site only: ${reports.length} saved reports`);
+  }
+
+  for (const month of siteOnly ? [] : months) {
     const started = Date.now();
-    const [book, coverage] = await Promise.all([loadCanonicalBook(month), getHoldingsCoverage(month)]);
+    const book = await loadCanonicalBook(month);
+    const coverage = coverageFor(month, book.currentFamilyIds, families);
     const extras = {
       families: families.map((f) => ({
         id: Number(f.id),
@@ -177,6 +207,10 @@ async function main() {
     console.log(`  ${month}: funds ${fundRows.length} stocks ${stockIds.length} in ${Date.now() - started}ms`);
   }
 
+  if (siteOnly) {
+    console.log("site only: keeping saved fund and stock snapshots");
+  }
+
   const stockRows: { stock_id: string; month: string; payload: unknown; updated_at: string }[] = [];
   for (const [id, list] of pendingStock) {
     const history = (stockHistory.get(id) || []).filter((h) => h.fund_count > 0);
@@ -189,10 +223,10 @@ async function main() {
       });
     }
   }
-  await upsertChunks(db, "stock_snapshot", stockRows, "stock_id,month");
+  if (!siteOnly) await upsertChunks(db, "stock_snapshot", stockRows, "stock_id,month");
 
   const fundPatch: { family_id: number; month: string; payload: unknown; updated_at: string }[] = [];
-  for (const month of months) {
+  for (const month of siteOnly ? [] : months) {
     const { data, error } = await db.from("fund_snapshot").select("family_id, payload").eq("month", month);
     if (error) throw new Error(error.message);
     for (const row of data || []) {
@@ -238,6 +272,7 @@ async function main() {
   mkdirSync(resolve(process.cwd(), "public"), { recursive: true });
   writeFileSync(resolve(process.cwd(), "public/search-index.json"), JSON.stringify(searchIndex));
   console.log(`wrote public/search-index.json (${searchIndex.funds.length} funds, ${searchIndex.stocks.length} stocks)`);
+  await notifyRevalidate("holdings");
   console.log("snapshots ok");
 }
 

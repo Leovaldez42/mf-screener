@@ -282,6 +282,13 @@ describe("instrumentSectorLabel", () => {
       "IT - Hardware",
     );
   });
+
+  it("drops the trailing ## FinAPI puts on overseas sector labels", () => {
+    assert.equal(
+      instrumentSectorLabel({ display_name: "Netflix Inc", sector: "Movies & Entertainment ##", isin: null }),
+      "Movies & Entertainment",
+    );
+  });
 });
 
 describe("duplicate name normalize + merge", () => {

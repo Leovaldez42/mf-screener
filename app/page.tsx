@@ -7,7 +7,7 @@ import { pageMetadata } from "@/lib/page-meta";
 import { getSearchIndex } from "@/lib/search-index";
 import { supabaseConfigured } from "@/lib/supabase";
 
-export const revalidate = 86400;
+export const revalidate = 2592000;
 
 export async function generateMetadata(): Promise<Metadata> {
   const fallback = pageMetadata({

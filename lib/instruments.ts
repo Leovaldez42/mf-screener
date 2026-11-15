@@ -200,7 +200,7 @@ function isUnlistedIndianHolding(row: InstrumentRow): boolean {
 }
 
 export function instrumentSectorLabel(row: InstrumentRow): string {
-  const sector = (row.sector || "").trim();
+  const sector = (row.sector || "").replace(/\s*#+\s*$/, "").trim();
   if (sector) return sector;
   if (isUnlistedIndianHolding(row)) return "Unlisted / other";
   const rawIsin = (row.isin || "").trim().toUpperCase();

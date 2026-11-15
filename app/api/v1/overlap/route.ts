@@ -3,7 +3,7 @@ import { getOverlap, getOverlapSuggestions, parseOverlapFunds } from "@/lib/cach
 import { SNAPSHOT_CACHE_CONTROL, jsonCached, jsonNoStore } from "@/lib/http-cache";
 import { supabaseConfigured } from "@/lib/supabase";
 
-export const revalidate = 86400;
+export const revalidate = 2592000;
 
 export async function GET(req: NextRequest) {
   if (!supabaseConfigured()) {
