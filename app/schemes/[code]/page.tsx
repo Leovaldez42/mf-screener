@@ -6,11 +6,23 @@ import { classShowsPe, parseAssetClass } from "@/lib/fund-class";
 import { formatDelta, formatNumber } from "@/lib/format";
 import { pageMetadata } from "@/lib/page-meta";
 import { type CategoryAverage, type SchemeMetric } from "@/lib/scheme-metrics";
+import { getSiteMeta } from "@/lib/snapshot-read";
 import { supabaseConfigured } from "@/lib/supabase";
 
-export const revalidate = 120;
+export const revalidate = 86400;
+export const dynamicParams = true;
 
 type Props = { params: Promise<{ code: string }> };
+
+export async function generateStaticParams() {
+  if (!supabaseConfigured()) return [];
+  try {
+    const meta = await getSiteMeta();
+    return (meta?.topFundIds || []).map((id) => ({ code: String(id) }));
+  } catch {
+    return [];
+  }
+}
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { code } = await params;

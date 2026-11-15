@@ -25,7 +25,7 @@ function loadEnv() {
 
 loadEnv();
 
-const BASE = (process.env.FINAPI_BASE || "https://finapi.upvaly.com").replace(/\/$/, "");
+const BASE = (process.env.FINAPI_BASE || "https://fin.ejiapi.com").replace(/\/$/, "");
 const KEY = process.env.FINAPI_API_KEY;
 const PAGE_SIZE = Number(process.env.INGEST_METRICS_PAGE_SIZE || "50");
 const MAX_PAGES = Number(process.env.INGEST_METRICS_MAX_PAGES || "0");
@@ -59,7 +59,7 @@ async function finget(path: string): Promise<unknown> {
   for (let attempt = 0; attempt < 8; attempt++) {
     try {
       const res = await fetch(url, {
-        headers: { "X-API-Key": KEY! },
+        headers: { "x-api-key": KEY!, Accept: "application/json" },
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
       const text = await res.text();

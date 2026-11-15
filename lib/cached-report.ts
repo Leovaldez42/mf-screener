@@ -84,6 +84,9 @@ const getMonthlyReportArchive = unstable_cache(loadMonthlyReport, ["monthly-repo
 });
 
 export async function getMonthlyReport(month: string, latestMonth?: string) {
+  const { getReportSnapshot } = await import("@/lib/snapshot-read");
+  const snap = await getReportSnapshot(month);
+  if (snap?.report) return snap.report;
   const latest = latestMonth ?? (await listCompleteMonths())[0];
   if (month === latest) return getMonthlyReportLatest(month);
   return getMonthlyReportArchive(month);

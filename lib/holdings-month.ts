@@ -33,7 +33,7 @@ function monthLookback(end: string, count: number): string[] {
   return out;
 }
 
-async function queryCompleteMonths(): Promise<string[]> {
+export async function queryCompleteMonthsFromHoldings(): Promise<string[]> {
   const db = createAnonClient();
   const candidates = monthLookback(lastCompletedYyyyMm(), LOOKBACK_MONTHS);
   const counts = await Promise.all(
@@ -49,13 +49,21 @@ async function queryCompleteMonths(): Promise<string[]> {
   return counts.filter((row) => row.count > 0).map((row) => row.month);
 }
 
-const cachedCompleteMonths = unstable_cache(queryCompleteMonths, ["complete-months", "ready-14"], {
+const cachedCompleteMonths = unstable_cache(queryCompleteMonthsFromHoldings, ["complete-months", "ready-14"], {
   revalidate: HOLDINGS_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS],
 });
 
 /** Months that have actual holdings books, not phantom “all sold” diffs from a missing disclosure. */
 export async function listCompleteMonths(): Promise<string[]> {
+  if (process.env.SNAPSHOT_BUILD === "1") return queryCompleteMonthsFromHoldings();
+  try {
+    const { getSiteMeta } = await import("@/lib/snapshot-read");
+    const meta = await getSiteMeta();
+    if (meta?.months?.length) return meta.months;
+  } catch {
+    /* snapshots table may not exist yet */
+  }
   return cachedCompleteMonths();
 }
 

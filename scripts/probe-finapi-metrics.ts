@@ -18,15 +18,17 @@ function loadEnv() {
 }
 loadEnv();
 const KEY = process.env.FINAPI_API_KEY!;
+const BASE = (process.env.FINAPI_BASE || "https://fin.ejiapi.com").replace(/\/$/, "");
+const H = { "x-api-key": KEY, Accept: "application/json" };
 async function main() {
-  const r = await fetch("https://finapi.upvaly.com/api/mf/paginated?page=1&size=2", {
-    headers: { "X-API-Key": KEY },
+  const r = await fetch(`${BASE}/api/mf/paginated?page=1&size=2`, {
+    headers: H,
   });
   const j = await r.json();
   console.log("top", Object.keys(j));
   console.log("data type", Array.isArray(j.data) ? "array "+j.data.length : typeof j.data, j.data && !Array.isArray(j.data) ? Object.keys(j.data) : "");
-  const d = await fetch("https://finapi.upvaly.com/api/mf/scheme-code/122639?fields=cagr,riskMetrics,ranks,expenseRatio", {
-    headers: { "X-API-Key": KEY },
+  const d = await fetch(`${BASE}/api/mf/scheme-code/122639?fields=cagr,riskMetrics,ranks,expenseRatio`, {
+    headers: H,
   });
   const s = await d.json();
   const rm = s.data?.riskMetrics;
@@ -49,8 +51,8 @@ async function main() {
   console.log("sharpRatio", JSON.stringify(s.data?.riskMetrics?.sharpRatio?.timeframes));
   console.log("plan/option", p?.planName, p?.optionName, p?.schemeCategory);
   const slim = await fetch(
-    "https://finapi.upvaly.com/api/mf/paginated?page=1&size=5&fields=schemeCode,schemeName,fundHouse,expenseRatio,cagr,riskMetrics,planName,optionName,schemeCategory,aum",
-    { headers: { "X-API-Key": KEY } },
+    `${BASE}/api/mf/paginated?page=1&size=5&fields=schemeCode,schemeName,fundHouse,expenseRatio,cagr,riskMetrics,planName,optionName,schemeCategory,aum`,
+    { headers: H },
   );
   const sl = await slim.json();
   const row0 = sl.data?.content?.[0];

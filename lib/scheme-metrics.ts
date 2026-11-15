@@ -2,6 +2,9 @@ import { assetClassFromCategory, isListedEtf, type AssetClassId } from "./fund-c
 import { isActiveEquityCategory, slugifyAmc } from "./equity";
 import { isInceptionCagrReliable } from "./inception-cagr";
 
+export const SCHEME_METRIC_SELECT =
+  "scheme_code, name, fund_house, amc_slug, category, plan_name, option_name, is_direct, is_growth, is_active_equity, asset_class, aum_cr, expense_ratio, pe, sharpe_1y, sharpe_3y, sharpe_5y, sortino_3y, std_dev_3y, beta_3y, cagr_1y, cagr_3y, cagr_5y, cagr_7y, cagr_10y, cagr_inception, fetched_at";
+
 export type SchemeMetric = {
   scheme_code: string;
   name: string;

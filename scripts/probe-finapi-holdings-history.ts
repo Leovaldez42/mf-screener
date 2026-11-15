@@ -24,13 +24,13 @@ function loadEnv() {
 loadEnv();
 
 const KEY = process.env.FINAPI_API_KEY!;
-const BASE = "https://finapi.upvaly.com";
+const BASE = (process.env.FINAPI_BASE || "https://fin.ejiapi.com").replace(/\/$/, "");
 
 async function inspect() {
   const path =
     "/api/mf/holdings-history/scheme-code/122639?startMonth=05-2026&endMonth=07-2026";
   const res = await fetch(`${BASE}${path}`, {
-    headers: { "X-API-Key": KEY, Accept: "application/json" },
+    headers: { "x-api-key": KEY, Accept: "application/json" },
   });
   const j = await res.json();
   const d = j.data;

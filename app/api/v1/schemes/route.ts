@@ -14,7 +14,7 @@ import {
 } from "@/lib/fund-class";
 import { METRICS_CACHE_CONTROL, jsonCached, jsonNoStore } from "@/lib/http-cache";
 import { compareInceptionCagr, withInceptionCagrFlag } from "@/lib/inception-cagr";
-import { SORTABLE, type SchemeMetric, type SortKey } from "@/lib/scheme-metrics";
+import { SCHEME_METRIC_SELECT, SORTABLE, type SchemeMetric, type SortKey } from "@/lib/scheme-metrics";
 import { createAnonClient, supabaseConfigured } from "@/lib/supabase";
 
 export const revalidate = 120;
@@ -120,7 +120,7 @@ export async function GET(req: NextRequest) {
 
   const db = createAnonClient();
   const query = applySchemeFilters(
-    db.from("scheme_metrics").select("*").eq("is_direct", true).eq("is_growth", true),
+    db.from("scheme_metrics").select(SCHEME_METRIC_SELECT).eq("is_direct", true).eq("is_growth", true),
     { ...filters, hideDefault: !showAll },
   )
     .order(sortKey, { ascending: order, nullsFirst: false })

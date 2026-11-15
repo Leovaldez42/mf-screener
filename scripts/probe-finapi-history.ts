@@ -24,10 +24,10 @@ function loadEnv() {
 loadEnv();
 
 const KEY = process.env.FINAPI_API_KEY!;
-const BASE = "https://finapi.upvaly.com";
+const BASE = (process.env.FINAPI_BASE || "https://fin.ejiapi.com").replace(/\/$/, "");
 
 async function hit(path: string) {
-  const res = await fetch(`${BASE}${path}`, { headers: { "X-API-Key": KEY, Accept: "application/json" } });
+  const res = await fetch(`${BASE}${path}`, { headers: { "x-api-key": KEY, Accept: "application/json" } });
   const text = await res.text();
   let keys = "";
   let asOf = "";

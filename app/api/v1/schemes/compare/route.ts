@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { METRICS_CACHE_CONTROL, jsonCached, jsonNoStore } from "@/lib/http-cache";
 import { withInceptionCagrFlag } from "@/lib/inception-cagr";
-import { COMPARE_MAX, type SchemeMetric } from "@/lib/scheme-metrics";
+import { COMPARE_MAX, SCHEME_METRIC_SELECT, type SchemeMetric } from "@/lib/scheme-metrics";
 import { createAnonClient, supabaseConfigured } from "@/lib/supabase";
 
 export const revalidate = 120;
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     return jsonNoStore({ error: "need_two_codes" }, 400);
   }
   const db = createAnonClient();
-  const { data, error } = await db.from("scheme_metrics").select("*").in("scheme_code", codes);
+  const { data, error } = await db.from("scheme_metrics").select(SCHEME_METRIC_SELECT).in("scheme_code", codes);
   if (error) return jsonNoStore({ error: error.message }, 500);
   const byCode = new Map((data || []).map((r) => [r.scheme_code as string, r]));
   const schemes = (codes.map((c) => byCode.get(c)).filter(Boolean) as SchemeMetric[]).map(

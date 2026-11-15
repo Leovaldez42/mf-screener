@@ -1,6 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { withInceptionCagrFlag } from "@/lib/inception-cagr";
-import { equalWeightCategoryAverages, type SchemeMetric } from "@/lib/scheme-metrics";
+import { equalWeightCategoryAverages, SCHEME_METRIC_SELECT, type SchemeMetric } from "@/lib/scheme-metrics";
 import {
   CLASS_STYLES,
   classStylesOrFilter,
@@ -17,11 +17,14 @@ async function loadScreenerUniverse() {
   const db = createAnonClient();
   const { data: peerRows, error: peerErr } = await db
     .from("scheme_metrics")
-    .select("*")
+    .select(SCHEME_METRIC_SELECT)
     .eq("is_direct", true)
     .eq("is_growth", true)
     .limit(UNIVERSE_LIMIT);
   if (peerErr) throw new Error(peerErr.message);
+  if ((peerRows || []).length > 1000) {
+    console.warn(`[supabase] scheme_metrics universe returned ${(peerRows || []).length} rows`);
+  }
 
   const { count, error: countErr } = await db
     .from("scheme_metrics")
@@ -73,7 +76,7 @@ export function styleAverageForClass(
 
 async function loadSchemePage(code: string) {
   const db = createAnonClient();
-  const { data, error } = await db.from("scheme_metrics").select("*").eq("scheme_code", code).maybeSingle();
+  const { data, error } = await db.from("scheme_metrics").select(SCHEME_METRIC_SELECT).eq("scheme_code", code).maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) return { error: "not_found" as const };
 
@@ -84,7 +87,7 @@ async function loadSchemePage(code: string) {
   if (category) {
     const { data: peers, error: peerErr } = await db
       .from("scheme_metrics")
-      .select("*")
+      .select(SCHEME_METRIC_SELECT)
       .eq("is_direct", true)
       .eq("is_growth", true)
       .eq("asset_class", assetClass)

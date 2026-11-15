@@ -18,7 +18,7 @@ const CASH_REPO =
   /\b(?:treps|cblo|tri[-\s]?party(?:\s+repo)?|reverse\s+repo)\b/i;
 
 const CASH_EQUIV =
-  /\bnet\s+current\s+assets?\b|\bnet\s+receivables?\b|\bcash\s*(?:&|and)\s*cash\s+equivalents?\b|\bcash\s+equivalents?\b/i;
+  /\bnet\s+current\s+assets?\b|\bnet\s+receivables?\b|\bcash\s*(?:&|and)\s*cash\s+equivalents?\b|\bcash\s+equivalents?\b|\bclearing corporation of india\b|\bccil\b/i;
 
 const OVERSEAS_MF = /\boverseas\s+mutual\s+fund(?:\s+units?)?\b/i;
 
@@ -113,6 +113,15 @@ export function isEquityInstrument(row: InstrumentRow): boolean {
 export function isCashLikeNonEquity(row: InstrumentRow): boolean {
   const p = nonEquityPattern(row);
   return p === "cash_repo" || p === "cash_equiv";
+}
+
+/** Sector bucket on a fund book. Cash-like and leftover gap are "Cash & others"; REITs keep their industry. */
+export function fundPortfolioSector(row: InstrumentRow): string {
+  if (isCashLikeNonEquity(row)) return "Cash & others";
+  const p = nonEquityPattern(row);
+  if (p === "reit_invit") return instrumentSectorLabel(row) || "REITs";
+  if (p) return "Other instruments";
+  return instrumentSectorLabel(row) || "Unclassified";
 }
 
 export function pickCleanestDisplayName(names: string[]): string {
