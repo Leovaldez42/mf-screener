@@ -55,10 +55,11 @@ async function loadFundDirectory(): Promise<FundDirectoryRow[]> {
       .from("families")
       .select("id, name, amc_slug, sebi_category")
       .eq("is_active_equity", true)
-      .eq("has_holdings", true),
+      .eq("has_holdings", true)
+      .order("id"),
   );
   const amcs = await fetchAllRows<{ slug: string; name: string }>(() =>
-    db.from("amcs").select("slug, name"),
+    db.from("amcs").select("slug, name").order("slug"),
   );
   const houseBySlug = new Map(amcs.map((a) => [a.slug, a.name]));
   const metricBy = await metricsByCodes(families.map((f) => String(f.id)));
@@ -92,7 +93,8 @@ async function loadStockDirectory(): Promise<{ month: string | null; stocks: Sto
     db
       .from("stock_month_aggregates")
       .select("stock_id, fund_count, stocks(display_name, sector, isin)")
-      .eq("month", month),
+      .eq("month", month)
+      .order("stock_id"),
   );
   const lines: {
     stock_id: string;

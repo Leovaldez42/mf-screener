@@ -339,6 +339,34 @@ async function main() {
     return sector;
   }
 
+  /** A re-fetched book replaces the stored one; lines the AMC no longer discloses must not linger. */
+  async function pruneStale(
+    table: "holdings_snapshots" | "holding_diffs",
+    familyId: number,
+    month: string,
+    keep: string[],
+  ) {
+    const { data, error } = await db
+      .from(table)
+      .select("stock_id")
+      .eq("family_id", familyId)
+      .eq("month", month)
+      .limit(5000);
+    if (error) throw error;
+    const keepSet = new Set(keep);
+    const stale = (data || []).map((r) => r.stock_id as string).filter((id) => !keepSet.has(id));
+    for (let i = 0; i < stale.length; i += 200) {
+      const { error: dErr } = await db
+        .from(table)
+        .delete()
+        .eq("family_id", familyId)
+        .eq("month", month)
+        .in("stock_id", stale.slice(i, i + 200));
+      if (dErr) throw dErr;
+    }
+    if (stale.length) notes.push(`pruned ${table} ${familyId}/${month}: ${stale.length}`);
+  }
+
   async function upsertStock(h: HoldingRow): Promise<string | null> {
     const display = (h.name || "").trim();
     if (!display) return null;
@@ -540,6 +568,7 @@ async function main() {
               onConflict: "family_id,month,stock_id",
             });
             if (error) throw error;
+            await pruneStale("holdings_snapshots", familyId, month, uniqueRows.map((r) => r.stock_id));
           }
           snapshots[month] = map;
         }
@@ -597,6 +626,13 @@ async function main() {
             onConflict: "family_id,month,stock_id",
           });
           if (error) throw error;
+          const keepByMonth = new Map<string, string[]>();
+          for (const d of uniqueDiffs) {
+            const list = keepByMonth.get(d.month) || [];
+            list.push(d.stock_id);
+            keepByMonth.set(d.month, list);
+          }
+          for (const [month, keep] of keepByMonth) await pruneStale("holding_diffs", familyId, month, keep);
         }
 
         familiesOk += 1;
@@ -626,13 +662,28 @@ async function main() {
       }
 
       const diffs = await fetchAllRows<{ stock_id: string; qty_delta: number; value_delta_cr: number }>(() =>
-        db.from("holding_diffs").select("stock_id, qty_delta, value_delta_cr").eq("month", month),
+        db
+          .from("holding_diffs")
+          .select("stock_id, qty_delta, value_delta_cr")
+          .eq("month", month)
+          .order("family_id")
+          .order("stock_id"),
       );
       const snaps = await fetchAllRows<{ stock_id: string; weight_pct: number; family_id: number }>(() =>
-        db.from("holdings_snapshots").select("stock_id, weight_pct, family_id").eq("month", month),
+        db
+          .from("holdings_snapshots")
+          .select("stock_id, weight_pct, family_id")
+          .eq("month", month)
+          .order("family_id")
+          .order("stock_id"),
       );
       const prevSnaps = await fetchAllRows<{ stock_id: string; family_id: number }>(() =>
-        db.from("holdings_snapshots").select("stock_id, family_id").eq("month", prev),
+        db
+          .from("holdings_snapshots")
+          .select("stock_id, family_id")
+          .eq("month", prev)
+          .order("family_id")
+          .order("stock_id"),
       );
       notes.push(`agg ${month} snaps=${snaps.length} diffs=${diffs.length}`);
       console.log(`agg ${month} snaps=${snaps.length} diffs=${diffs.length}`);

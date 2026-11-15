@@ -13,12 +13,12 @@ async function loadMonthlyReport(month: string): Promise<MonthlyReport> {
   const [book, families, amcs, coverage, metrics] = await Promise.all([
     getCanonicalBook(month),
     fetchAllRows<{ id: number; name: string; amc_slug: string | null }>(() =>
-      db.from("families").select("id, name, amc_slug"),
+      db.from("families").select("id, name, amc_slug").order("id"),
     ),
-    fetchAllRows<{ slug: string; name: string }>(() => db.from("amcs").select("slug, name")),
+    fetchAllRows<{ slug: string; name: string }>(() => db.from("amcs").select("slug, name").order("slug")),
     getHoldingsCoverage(month),
     fetchAllRows<{ scheme_code: string; aum_cr: number | null }>(() =>
-      db.from("scheme_metrics").select("scheme_code, aum_cr"),
+      db.from("scheme_metrics").select("scheme_code, aum_cr").order("scheme_code"),
     ),
   ]);
 

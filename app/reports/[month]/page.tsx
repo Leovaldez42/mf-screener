@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ReportStory } from "@/components/report-story";
 import { getMonthlyReport } from "@/lib/cached-report";
 import { formatMonthLabel } from "@/lib/format";
+import { reportForStory } from "@/lib/monthly-report";
 import { reportMetaDescription } from "@/lib/report-copy";
 import { listCompleteMonths } from "@/lib/holdings-month";
 import { isYearMonth, siteUrl } from "@/lib/site";
@@ -71,5 +72,5 @@ export default async function ReportMonthPage({ params }: Props) {
     report.topNetBuys[0]?.display_name || report.moneyWentByFunds[0]?.display_name || "active-equity books";
   const shareText = `What fund managers bought in ${label}: ${lead}. ${pageUrl}`;
 
-  return <ReportStory report={report} requested={raw} pageUrl={pageUrl} shareText={shareText} />;
+  return <ReportStory report={reportForStory(report)} requested={raw} pageUrl={pageUrl} shareText={shareText} />;
 }

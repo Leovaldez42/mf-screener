@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { getHoldingsCoverage, loadCanonicalBook } from "../lib/cached-holdings";
 import { loadOverlapSuggestions } from "../lib/cached-overlap";
@@ -22,7 +22,7 @@ process.env.SNAPSHOT_BUILD = "1";
 function loadEnv() {
   for (const file of [".env.local", ".env"]) {
     try {
-      const text = require("node:fs").readFileSync(resolve(process.cwd(), file), "utf8") as string;
+      const text = readFileSync(resolve(process.cwd(), file), "utf8");
       for (const line of text.split("\n")) {
         const trimmed = line.trim();
         if (!trimmed || trimmed.startsWith("#")) continue;
@@ -77,11 +77,14 @@ async function main() {
 
   const [families, amcs, metrics] = await Promise.all([
     fetchAllRows<FamilyRow>(() =>
-      anon.from("families").select("id, name, amc_slug, sebi_category, is_active_equity, has_holdings, latest_month"),
+      anon
+        .from("families")
+        .select("id, name, amc_slug, sebi_category, is_active_equity, has_holdings, latest_month")
+        .order("id"),
     ),
-    fetchAllRows<{ slug: string; name: string }>(() => anon.from("amcs").select("slug, name")),
+    fetchAllRows<{ slug: string; name: string }>(() => anon.from("amcs").select("slug, name").order("slug")),
     fetchAllRows<{ scheme_code: string; aum_cr: number | null }>(() =>
-      anon.from("scheme_metrics").select("scheme_code, aum_cr"),
+      anon.from("scheme_metrics").select("scheme_code, aum_cr").order("scheme_code"),
     ),
   ]);
   const familyById = new Map(families.map((f) => [Number(f.id), f]));

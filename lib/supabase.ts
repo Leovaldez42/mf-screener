@@ -22,7 +22,11 @@ export function supabaseConfigured(): boolean {
   return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 }
 
-/** PostgREST returns 1000 rows unless you page. Rebuild queries must use this. */
+/**
+ * PostgREST returns 1000 rows unless you page. Rebuild queries must use this, and must `.order()` on a
+ * unique key: without it Postgres may return overlapping pages. After the first full page, the next
+ * `concurrency` pages are fetched in parallel.
+ */
 export async function fetchAllRows<T>(
   makeQuery: () => {
     range: (
@@ -32,14 +36,28 @@ export async function fetchAllRows<T>(
   },
   page = 1000,
   max = 500000,
+  concurrency = 6,
 ): Promise<T[]> {
-  const out: T[] = [];
-  for (let from = 0; from < max; from += page) {
+  const fetchPage = async (from: number) => {
     const { data, error } = await makeQuery().range(from, from + page - 1);
     if (error) throw new Error(error.message);
-    if (!data?.length) break;
-    out.push(...data);
-    if (data.length < page) break;
+    return data || [];
+  };
+  const out: T[] = [];
+  const first = await fetchPage(0);
+  out.push(...first);
+  let done = first.length < page;
+  for (let from = page; !done && from < max; from += page * concurrency) {
+    const starts: number[] = [];
+    for (let i = 0; i < concurrency && from + i * page < max; i++) starts.push(from + i * page);
+    const pages = await Promise.all(starts.map(fetchPage));
+    for (const rows of pages) {
+      out.push(...rows);
+      if (rows.length < page) {
+        done = true;
+        break;
+      }
+    }
   }
   if (out.length > 1000) {
     console.warn(`[supabase] query returned ${out.length} rows`);
