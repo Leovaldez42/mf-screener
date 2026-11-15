@@ -26,11 +26,26 @@ export function FundSectorMap({ sectors }: { sectors: FundSector[] }) {
   }
 
   const model = useMemo(() => {
-    const sorted = [...sectors].sort((a, b) => b.weight_pct - a.weight_pct || a.name.localeCompare(b.name, "en-IN"));
-    const equity = sorted.reduce((sum, s) => sum + s.weight_pct, 0);
-    const cash = Math.max(0, 100 - equity);
-    const top = sorted.slice(0, OVERVIEW_TOP);
-    const rest = sorted.slice(OVERVIEW_TOP);
+    const byName = new Map<string, FundSector>();
+    for (const s of sectors) {
+      const cur = byName.get(s.name);
+      if (cur) cur.weight_pct += s.weight_pct;
+      else byName.set(s.name, { ...s });
+    }
+    const merged = [...byName.values()];
+    const listed = merged.reduce((sum, s) => sum + s.weight_pct, 0);
+    const gap = Math.max(0, 100 - listed);
+    if (gap >= CASH_EPS) {
+      const cash = merged.find((s) => s.name === "Cash & others");
+      if (cash) cash.weight_pct += gap;
+      else merged.push({ name: "Cash & others", weight_pct: gap });
+    }
+    const sorted = merged.sort((a, b) => b.weight_pct - a.weight_pct || a.name.localeCompare(b.name, "en-IN"));
+    const cash = sorted.find((s) => s.name === "Cash & others")?.weight_pct ?? 0;
+    const equity = Math.max(0, 100 - cash);
+    const withoutCash = sorted.filter((s) => s.name !== "Cash & others");
+    const top = withoutCash.slice(0, OVERVIEW_TOP);
+    const rest = withoutCash.slice(OVERVIEW_TOP);
     const restWeight = rest.reduce((sum, s) => sum + s.weight_pct, 0);
     const colorByName = new Map(sorted.map((s) => [s.name, sectorFill(s.name)]));
     return { sorted, equity, cash, top, rest, restWeight, colorByName };
@@ -60,14 +75,13 @@ export function FundSectorMap({ sectors }: { sectors: FundSector[] }) {
       ...s,
       swatch: colorByName.get(s.name) || sectorFill(s.name),
     }));
-    if (showCash) rows.push({ name: "Cash & others", weight_pct: cash, swatch: CASH_SWATCH });
     const needle = q.trim().toLowerCase();
     const filtered = needle ? rows.filter((r) => r.name.toLowerCase().includes(needle)) : rows;
     const next = [...filtered];
     if (sort === "name") next.sort((a, b) => a.name.localeCompare(b.name, "en-IN"));
     else next.sort((a, b) => b.weight_pct - a.weight_pct || a.name.localeCompare(b.name, "en-IN"));
     return next;
-  }, [sorted, colorByName, showCash, cash, q, sort]);
+  }, [sorted, colorByName, q, sort]);
 
   if (!sectors.length) return null;
 

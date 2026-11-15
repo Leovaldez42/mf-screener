@@ -65,7 +65,8 @@ export function OverlapView({
 }) {
   const search = useSearchParams();
   const router = useRouter();
-  const codes = parseFunds(search.get("funds"));
+  const fundsParam = search.get("funds") || "";
+  const codes = parseFunds(fundsParam);
   const requestedMonth = search.get("month") || "";
   const focusPicker = codes.length === 1;
   const inputA = useRef<HTMLInputElement>(null);
@@ -76,15 +77,44 @@ export function OverlapView({
   const [q, setQ] = useState(["", "", ""]);
   const [hits, setHits] = useState<SchemeMetric[][]>([[], [], []]);
   const [names, setNames] = useState<Record<string, string>>({});
-  const data = initialData;
-  const error = initialError;
-  const suggestions = initialSuggestions;
+  const [data, setData] = useState<Payload | null>(initialData);
+  const [error, setError] = useState<string | null>(initialError);
+  const [suggestions, setSuggestions] = useState(initialSuggestions);
   const [showAll, setShowAll] = useState(false);
   const [wantThird, setWantThird] = useState(false);
 
   useEffect(() => {
     if (focusPicker) queueMicrotask(() => inputRefs[1].current?.focus());
   }, [focusPicker]);
+
+  useEffect(() => {
+    const funds = codes.join(",");
+    const ac = new AbortController();
+    const qs = new URLSearchParams();
+    if (funds) qs.set("funds", funds);
+    if (requestedMonth) qs.set("month", requestedMonth);
+    if (!funds) qs.set("suggest", "1");
+    fetch(`/api/v1/overlap?${qs}`, { signal: ac.signal })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.suggestions) setSuggestions(d.suggestions);
+        if (d.error && !d.pairs) {
+          setError(
+            d.error === "unknown_codes"
+              ? "One of those fund codes is not in the holdings book."
+              : typeof d.error === "string" && d.error.includes("_")
+                ? "Could not load overlap"
+                : d.error,
+          );
+          setData(d.pairs ? d : null);
+          return;
+        }
+        setError(null);
+        setData(d);
+      })
+      .catch(() => undefined);
+    return () => ac.abort();
+  }, [fundsParam, requestedMonth]);
 
   useEffect(() => {
     const timers = q.map((query, i) => {

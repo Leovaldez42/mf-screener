@@ -4,7 +4,7 @@ import { listCompleteMonths } from "@/lib/holdings-month";
 import { HOLDINGS_CACHE_CONTROL, jsonCached, jsonNoStore } from "@/lib/http-cache";
 import { supabaseConfigured } from "@/lib/supabase";
 
-export const revalidate = 300;
+export const revalidate = 86400;
 
 export async function GET() {
   if (!supabaseConfigured()) {

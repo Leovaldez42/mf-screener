@@ -4,8 +4,7 @@ import { pageMetadata } from "@/lib/page-meta";
 import { supabaseConfigured } from "@/lib/supabase";
 import { StocksIndex } from "./stocks-index";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 300;
+export const revalidate = 86400;
 
 export const metadata: Metadata = pageMetadata({
   title: "Stocks held by Indian mutual funds · Thinkbrew",
@@ -14,15 +13,10 @@ export const metadata: Metadata = pageMetadata({
   path: "/stocks",
 });
 
-export default async function StocksIndexPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ q?: string }>;
-}) {
+export default async function StocksIndexPage() {
   if (!supabaseConfigured()) {
     return <p className="text-sm text-muted">Holdings data is not configured.</p>;
   }
-  const { month, stocks } = await getStockDirectory();
-  const initialQ = ((await searchParams).q || "").trim();
-  return <StocksIndex stocks={stocks} month={month} initialQ={initialQ} />;
+  const dir = await getStockDirectory();
+  return <StocksIndex stocks={dir.stocks} month={dir.month} initialQ="" />;
 }

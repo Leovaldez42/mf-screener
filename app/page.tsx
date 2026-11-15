@@ -4,11 +4,10 @@ import { getMonthlyReport } from "@/lib/cached-report";
 import { formatMonthLabel, formatNumber } from "@/lib/format";
 import { listCompleteMonths } from "@/lib/holdings-month";
 import { pageMetadata } from "@/lib/page-meta";
-import { searchCatalog } from "@/lib/search";
+import { getSearchIndex } from "@/lib/search-index";
 import { supabaseConfigured } from "@/lib/supabase";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 300;
+export const revalidate = 86400;
 
 export async function generateMetadata(): Promise<Metadata> {
   const fallback = pageMetadata({
@@ -19,8 +18,7 @@ export async function generateMetadata(): Promise<Metadata> {
   });
   if (!supabaseConfigured()) return fallback;
   try {
-    const months = await listCompleteMonths();
-    const month = months[0];
+    const month = (await listCompleteMonths())[0];
     if (!month) return fallback;
     const report = await getMonthlyReport(month);
     const label = formatMonthLabel(month);
@@ -41,11 +39,13 @@ export default async function LandingPage() {
   if (!supabaseConfigured()) {
     return <p className="text-sm text-muted">Holdings data is not configured.</p>;
   }
-  const months = await listCompleteMonths();
-  const month = months[0];
+  const month = (await listCompleteMonths())[0];
   if (!month) {
     return <p className="text-sm text-muted">No holdings months yet.</p>;
   }
-  const [report, search] = await Promise.all([getMonthlyReport(month), searchCatalog("")]);
-  return <HomeLanding report={report} suggestions={search.suggestions} />;
+  const [report, index] = await Promise.all([
+    getMonthlyReport(month),
+    getSearchIndex().catch(() => null),
+  ]);
+  return <HomeLanding report={report} suggestions={index?.suggestions || []} />;
 }

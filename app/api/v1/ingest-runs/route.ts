@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   const db = createAnonClient();
   const { data, error } = await db
     .from("ingest_runs")
-    .select("*")
+    .select("id, source, started_at, finished_at, status, months, families_ok, families_fail, notes")
     .order("started_at", { ascending: false })
     .limit(20);
   if (error) return jsonNoStore({ error: error.message }, 500);

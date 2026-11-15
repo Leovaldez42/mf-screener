@@ -1,40 +1,45 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import { getFundPayload } from "@/lib/cached-holdings";
 import { fundPageDescription, fundPageTitle } from "@/lib/page-meta";
 import { siteUrl } from "@/lib/site";
+import { getSiteMeta } from "@/lib/snapshot-read";
 import { supabaseConfigured } from "@/lib/supabase";
 import { FundView, type FundViewPayload } from "./fund-view";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 300;
+export const revalidate = 86400;
+export const dynamicParams = true;
 
-type Props = {
-  params: Promise<{ id: string }>;
-  searchParams: Promise<{ month?: string }>;
-};
+type Props = { params: Promise<{ id: string }> };
 
 function asViewPayload(payload: Awaited<ReturnType<typeof getFundPayload>>): FundViewPayload {
   return payload as FundViewPayload;
 }
 
-async function loadFund(id: string, month: string) {
+async function loadFund(id: string) {
   const familyId = Number(id);
   if (!Number.isFinite(familyId)) return null;
-  let payload = await getFundPayload(familyId, month);
-  if ("error" in payload && payload.error === "not_found") return null;
-  if ("error" in payload && payload.error === "unknown_month") {
-    payload = await getFundPayload(familyId, "");
-  }
+  const payload = await getFundPayload(familyId, "");
+  if ("error" in payload && payload.error) return null;
   return payload;
 }
 
-export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
+export async function generateStaticParams() {
+  if (!supabaseConfigured()) return [];
+  try {
+    const meta = await getSiteMeta();
+    return (meta?.topFundIds || []).map((id) => ({ id: String(id) }));
+  } catch {
+    return [];
+  }
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
-  const { month: q } = await searchParams;
   if (!supabaseConfigured()) return { title: "Fund" };
-  const payload = await loadFund(id, q || "");
-  if (!payload || ("error" in payload && payload.error === "not_found")) {
+  const payload = await loadFund(id);
+  if (!payload || ("error" in payload && payload.error)) {
     return { title: "Fund not found" };
   }
   const family = "family" in payload ? payload.family : undefined;
@@ -48,7 +53,7 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
     holdingsCount: holdings.length,
     topNames: holdings.slice(0, 3).map((h) => h.display_name),
   });
-  const url = siteUrl(`/funds/${id}${month ? `?month=${month}` : ""}`);
+  const url = siteUrl(`/funds/${id}`);
   return {
     title: { absolute: title },
     description,
@@ -68,21 +73,17 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   };
 }
 
-export default async function FundRoute({ params, searchParams }: Props) {
+export default async function FundRoute({ params }: Props) {
   const { id } = await params;
-  const { month: q } = await searchParams;
   if (!Number.isFinite(Number(id))) notFound();
   if (!supabaseConfigured()) {
     return <p className="text-sm text-muted">Holdings data is not configured.</p>;
   }
-  const payload = await loadFund(id, q || "");
-  if (!payload || ("error" in payload && payload.error === "not_found")) notFound();
+  const payload = await loadFund(id);
+  if (!payload || ("error" in payload && payload.error)) notFound();
   return (
-    <FundView
-      key={`${id}:${"month" in payload ? payload.month : ""}`}
-      initial={asViewPayload(payload)}
-      fundId={id}
-      requestedMonth={q || ""}
-    />
+    <Suspense fallback={<p className="text-sm text-muted">Loading fund…</p>}>
+      <FundView key={id} initial={asViewPayload(payload)} fundId={id} requestedMonth="" />
+    </Suspense>
   );
 }

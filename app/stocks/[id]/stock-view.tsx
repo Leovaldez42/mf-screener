@@ -62,11 +62,11 @@ function StockFallback() {
   );
 }
 
-function StockPage() {
+function StockPage({ initial }: { initial?: Payload | null }) {
   const { id } = useParams<{ id: string }>();
   const search = useSearchParams();
   const month = search.get("month") || "";
-  const [data, setData] = useState<Payload | null>(null);
+  const [data, setData] = useState<Payload | null>(initial && !month ? initial : null);
   const [error, setError] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
   const [reload, setReload] = useState(0);
@@ -238,10 +238,10 @@ function StockPage() {
   );
 }
 
-export function StockView() {
+export function StockView({ initial }: { initial?: Payload | null }) {
   return (
     <Suspense fallback={<StockFallback />}>
-      <StockPage />
+      <StockPage initial={initial} />
     </Suspense>
   );
 }

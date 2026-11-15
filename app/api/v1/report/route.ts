@@ -1,15 +1,10 @@
 import { NextRequest } from "next/server";
-import { getMonthlyReport, precomputeOlderReports } from "@/lib/cached-report";
+import { getMonthlyReport } from "@/lib/cached-report";
 import { requireHoldingsMonth } from "@/lib/cached-holdings";
-import {
-  HOLDINGS_CACHE_CONTROL,
-  REPORT_ARCHIVE_CACHE_CONTROL,
-  jsonCached,
-  jsonNoStore,
-} from "@/lib/http-cache";
+import { HOLDINGS_CACHE_CONTROL, SNAPSHOT_CACHE_CONTROL, jsonCached, jsonNoStore } from "@/lib/http-cache";
 import { supabaseConfigured } from "@/lib/supabase";
 
-export const revalidate = 300;
+export const revalidate = 86400;
 
 export async function GET(req: NextRequest) {
   if (!supabaseConfigured()) {
@@ -28,12 +23,8 @@ export async function GET(req: NextRequest) {
       }
       return jsonCached({ month: null, error: "no_holdings" }, HOLDINGS_CACHE_CONTROL);
     }
-    const latest = picked.availableMonths[0];
-    const report = await getMonthlyReport(picked.month, latest);
-    if (picked.month === latest) precomputeOlderReports(latest, picked.availableMonths);
-    const cache =
-      picked.month === latest ? HOLDINGS_CACHE_CONTROL : REPORT_ARCHIVE_CACHE_CONTROL;
-    return jsonCached(report, cache);
+    const report = await getMonthlyReport(picked.month, picked.availableMonths[0]);
+    return jsonCached(report, SNAPSHOT_CACHE_CONTROL);
   } catch (e) {
     return jsonNoStore({ error: e instanceof Error ? e.message : "report_failed" }, 500);
   }

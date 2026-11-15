@@ -1,14 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getMonthlyReport } from "@/lib/cached-report";
 import { formatMonthLabel } from "@/lib/format";
-import { listCompleteMonths } from "@/lib/holdings-month";
-import { reportListHeadline } from "@/lib/report-copy";
 import { pageMetadata } from "@/lib/page-meta";
+import { listCompleteMonths } from "@/lib/holdings-month";
+import { getSiteMeta } from "@/lib/snapshot-read";
 import { supabaseConfigured } from "@/lib/supabase";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 300;
+export const revalidate = 86400;
 
 export const metadata: Metadata = pageMetadata({
   title: "What fund managers bought · Thinkbrew",
@@ -21,17 +19,17 @@ export default async function ReportsIndexPage() {
   if (!supabaseConfigured()) {
     return <p className="text-sm text-muted">Holdings data is not configured.</p>;
   }
-  const months = await listCompleteMonths();
-  if (!months.length) {
+  const meta = await getSiteMeta();
+  const reports =
+    meta?.reportHeadlines?.length
+      ? meta.reportHeadlines
+      : (await listCompleteMonths()).map((month) => ({
+          month,
+          headline: `What fund managers bought in ${formatMonthLabel(month)}`,
+        }));
+  if (!reports.length) {
     return <p className="text-sm text-muted">No holdings months yet.</p>;
   }
-
-  const reports = await Promise.all(
-    months.map(async (month) => {
-      const report = await getMonthlyReport(month);
-      return { month, headline: reportListHeadline(report) };
-    }),
-  );
 
   return (
     <div className="space-y-6">

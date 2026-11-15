@@ -5,16 +5,27 @@ import { getStockPayload } from "@/lib/cached-holdings";
 import { formatMonthLabel } from "@/lib/format";
 import { formatSignedCr } from "@/lib/share-text";
 import { ogStockPath, siteUrl } from "@/lib/site";
+import { getSiteMeta } from "@/lib/snapshot-read";
+import { supabaseConfigured } from "@/lib/supabase";
 
-type Props = {
-  params: Promise<{ id: string }>;
-  searchParams: Promise<{ month?: string }>;
-};
+export const revalidate = 86400;
+export const dynamicParams = true;
 
-export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
+type Props = { params: Promise<{ id: string }> };
+
+export async function generateStaticParams() {
+  if (!supabaseConfigured()) return [];
+  try {
+    const meta = await getSiteMeta();
+    return (meta?.topStockIds || []).map((id) => ({ id }));
+  } catch {
+    return [];
+  }
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
-  const { month: q } = await searchParams;
-  const payload = await getStockPayload(id, q || "");
+  const payload = await getStockPayload(id, "");
   if ("error" in payload && payload.error === "not_found") {
     notFound();
   }
@@ -29,7 +40,7 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   const description = summary
     ? `${summary.fund_count} active-equity funds · ${formatSignedCr(summary.net_value_delta_cr, 1)} net · quantity-based adds & cuts. Not investment advice.`
     : `Active-equity fund adds and cuts for ${name}. Not investment advice.`;
-  const url = siteUrl(`/stocks/${id}${month ? `?month=${month}` : ""}`);
+  const url = siteUrl(`/stocks/${id}`);
   const image = siteUrl(ogStockPath(id, month));
   return {
     title,
@@ -52,10 +63,9 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   };
 }
 
-export default async function StockRoute({ params, searchParams }: Props) {
+export default async function StockRoute({ params }: Props) {
   const { id } = await params;
-  const { month: q } = await searchParams;
-  const payload = await getStockPayload(id, q || "");
+  const payload = await getStockPayload(id, "");
   if ("error" in payload && payload.error === "not_found") notFound();
-  return <StockView />;
+  return <StockView initial={payload as Parameters<typeof StockView>[0]["initial"]} />;
 }
