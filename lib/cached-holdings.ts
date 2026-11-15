@@ -1,22 +1,22 @@
 import { unstable_cache } from "next/cache";
-import { computeCanonicalBook, type SnapshotLine } from "@/lib/canonical-holdings";
+import { classifyHoldingEvent, computeCanonicalBook, type SnapshotLine } from "@/lib/canonical-holdings";
+import { holdingFlowCr } from "@/lib/holding-flow";
 import { listCompleteMonths, listFamilyMonths, previousMonth } from "@/lib/holdings-month";
 import { pickHoldingsMonth } from "@/lib/holdings-month-pick";
 import { CACHE_TAG_HOLDINGS, CACHE_TAG_METRICS, HOLDINGS_REVALIDATE_SEC } from "@/lib/http-cache";
 import { asOne } from "@/lib/rel";
 import { createAnonClient, fetchAllRows } from "@/lib/supabase";
 import {
+  fundPortfolioSector,
   instrumentSectorLabel,
-  isCashLikeNonEquity,
   isEquityInstrument,
-  nonEquityPattern,
   stripDuplicateMarkers,
 } from "@/lib/instruments";
 import type { ChaseRow } from "@/lib/types";
 
 export { holdingFlowCr } from "@/lib/holding-flow";
 
-async function loadMonthSnapshots(month: string): Promise<SnapshotLine[]> {
+export async function loadMonthSnapshots(month: string): Promise<SnapshotLine[]> {
   const db = createAnonClient();
   const rows = await fetchAllRows<{
     family_id: number;
@@ -50,7 +50,7 @@ async function loadMonthSnapshots(month: string): Promise<SnapshotLine[]> {
   return out;
 }
 
-async function loadCanonicalBook(month: string) {
+export async function loadCanonicalBook(month: string) {
   const [current, prior] = await Promise.all([
     loadMonthSnapshots(month),
     loadMonthSnapshots(previousMonth(month)),
@@ -72,6 +72,9 @@ export function getCanonicalBook(month: string) {
 }
 
 async function loadChaseRows(month: string): Promise<ChaseRow[]> {
+  const { getReportSnapshot } = await import("@/lib/snapshot-read");
+  const snap = await getReportSnapshot(month);
+  if (snap) return snap.chase;
   return (await getCanonicalBook(month)).chase;
 }
 
@@ -99,6 +102,11 @@ export const getChasePreview = unstable_cache(loadChasePreview, ["chase-preview"
 });
 
 async function loadSectorRows(month: string) {
+  const { getReportSnapshot } = await import("@/lib/snapshot-read");
+  const snap = await getReportSnapshot(month);
+  if (snap) {
+    return { excludedNoPriorMonth: snap.excludedNoPriorMonth, rows: snap.sectors };
+  }
   const book = await getCanonicalBook(month);
   const map = new Map<string, { net_value_delta_cr: number; net_qty_delta: number }>();
   for (const d of book.deltas) {
@@ -129,6 +137,15 @@ export type HoldingsCoverage = {
 };
 
 async function loadHoldingsCoverage(month: string): Promise<HoldingsCoverage> {
+  if (process.env.SNAPSHOT_BUILD !== "1") {
+    try {
+      const { getReportSnapshot } = await import("@/lib/snapshot-read");
+      const snap = await getReportSnapshot(month);
+      if (snap?.coverage) return snap.coverage;
+    } catch {
+      /* fall through */
+    }
+  }
   const db = createAnonClient();
   const families = await fetchAllRows<{ id: number; amc_slug: string | null }>(() =>
     db.from("families").select("id, amc_slug"),
@@ -148,10 +165,15 @@ async function loadHoldingsCoverage(month: string): Promise<HoldingsCoverage> {
   return { month, have, total, pct };
 }
 
-export const getHoldingsCoverage = unstable_cache(loadHoldingsCoverage, ["holdings-coverage"], {
+const getHoldingsCoverageCached = unstable_cache(loadHoldingsCoverage, ["holdings-coverage"], {
   revalidate: HOLDINGS_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS],
 });
+
+export async function getHoldingsCoverage(month: string): Promise<HoldingsCoverage> {
+  if (process.env.SNAPSHOT_BUILD === "1") return loadHoldingsCoverage(month);
+  return getHoldingsCoverageCached(month);
+}
 
 export async function resolveHoldingsMonth(requested: string | null): Promise<string | null> {
   const complete = await listCompleteMonths();
@@ -177,10 +199,14 @@ function isInvalidUuidError(message: string): boolean {
   return /invalid input syntax for type uuid/i.test(message);
 }
 
-async function loadStockPayload(id: string, requestedMonth: string) {
+export async function liveLoadStockPayload(id: string, requestedMonth: string) {
   if (!STOCK_UUID.test(id)) return { error: "not_found" as const };
   const db = createAnonClient();
-  const { data: stockRow, error: sErr } = await db.from("stocks").select("*").eq("id", id).maybeSingle();
+  const { data: stockRow, error: sErr } = await db
+    .from("stocks")
+    .select("id, display_name, sector, isin, name_key")
+    .eq("id", id)
+    .maybeSingle();
   if (sErr) {
     if (isInvalidUuidError(sErr.message)) return { error: "not_found" as const };
     throw new Error(sErr.message);
@@ -271,14 +297,18 @@ async function loadStockPayload(id: string, requestedMonth: string) {
   return { stock, month: monthToUse, history, holders, summary };
 }
 
-export const getStockPayload = unstable_cache(loadStockPayload, ["stock-payload-v8"], {
+export const getStockPayloadLive = unstable_cache(liveLoadStockPayload, ["stock-payload-v8"], {
   revalidate: HOLDINGS_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS],
 });
 
-async function loadFundPayload(familyId: number, requestedMonth: string) {
+export async function liveLoadFundPayload(familyId: number, requestedMonth: string) {
   const db = createAnonClient();
-  const { data: family, error } = await db.from("families").select("*").eq("id", familyId).maybeSingle();
+  const { data: family, error } = await db
+    .from("families")
+    .select("id, name, amc_slug, sebi_category, is_active_equity, has_holdings, latest_month")
+    .eq("id", familyId)
+    .maybeSingle();
   if (error) throw new Error(error.message);
   if (!family) {
     return { error: "not_found" as const };
@@ -310,38 +340,56 @@ async function loadFundPayload(familyId: number, requestedMonth: string) {
     };
   }
 
-  const [{ data: metric }, book] = await Promise.all([
+  const [{ data: metric }, current, prior] = await Promise.all([
     db.from("scheme_metrics").select("aum_cr").eq("scheme_code", String(familyId)).maybeSingle(),
-    getCanonicalBook(monthToUse),
+    loadFamilySnapshotLines(familyId, monthToUse),
+    loadFamilySnapshotLines(familyId, previousMonth(monthToUse)),
   ]);
   const aum_cr = metric?.aum_cr == null ? null : Number(metric.aum_cr);
-  const holdings = book.deltas
-    .filter((d) => d.family_id === familyId && d.qty > 0)
-    .map((d) => ({
-      stock_id: d.stock_id,
-      display_name: stripDuplicateMarkers(d.display_name || "Unknown"),
-      sector: d.sector,
-      isin: d.isin,
-      quantity: d.qty,
-      market_value_cr: d.value_cr,
-      weight_pct: d.weight_pct,
-      qty_delta: d.qty_delta,
-      net_value_delta_cr: d.value_delta_cr,
-      mv_change_cr: d.mv_change_cr,
-      weight_delta: d.weight_delta,
-      event: d.event,
-    }))
+  const prevById = new Map(prior.map((p) => [p.stock_id, p]));
+  const holdings = current
+    .map((line) => {
+      const prev = prevById.get(line.stock_id);
+      const prevQty = prev?.quantity ?? 0;
+      const qty_delta = line.quantity - prevQty;
+      return {
+        stock_id: line.stock_id,
+        display_name: stripDuplicateMarkers(line.display_name || "Unknown"),
+        sector: line.sector,
+        isin: line.isin,
+        quantity: line.quantity,
+        market_value_cr: line.market_value_cr,
+        weight_pct: line.weight_pct,
+        qty_delta,
+        net_value_delta_cr: holdingFlowCr({
+          quantity: line.quantity,
+          market_value_cr: line.market_value_cr,
+          prev_quantity: prevQty,
+          prev_market_value_cr: prev?.market_value_cr ?? 0,
+          qty_delta,
+        }),
+        mv_change_cr: line.market_value_cr - (prev?.market_value_cr ?? 0),
+        weight_delta: line.weight_pct - (prev?.weight_pct ?? 0),
+        event: classifyHoldingEvent(prevQty, line.quantity),
+      };
+    })
     .sort((a, b) => b.weight_pct - a.weight_pct);
 
   const sectorMap = new Map<string, { weight: number; value: number }>();
   for (const h of holdings) {
-    const p = nonEquityPattern(h);
-    if (p && isCashLikeNonEquity(h)) continue;
-    const key = p ? "Other instruments" : instrumentSectorLabel(h);
+    const key = fundPortfolioSector(h);
     const cur = sectorMap.get(key) || { weight: 0, value: 0 };
     cur.weight += h.weight_pct;
     cur.value += h.market_value_cr;
     sectorMap.set(key, cur);
+  }
+  let listed = 0;
+  for (const v of sectorMap.values()) listed += v.weight;
+  const gap = 100 - listed;
+  if (gap >= 0.05) {
+    const cur = sectorMap.get("Cash & others") || { weight: 0, value: 0 };
+    cur.weight += gap;
+    sectorMap.set("Cash & others", cur);
   }
   const sectors = [...sectorMap.entries()]
     .map(([name, v]) => ({ name, weight_pct: v.weight, market_value_cr: v.value }))
@@ -350,7 +398,55 @@ async function loadFundPayload(familyId: number, requestedMonth: string) {
   return { family, aum_cr, month: monthToUse, holdings, sectors, availableMonths };
 }
 
-export const getFundPayload = unstable_cache(loadFundPayload, ["fund-payload-equity-v8"], {
+async function loadFamilySnapshotLines(familyId: number, month: string): Promise<SnapshotLine[]> {
+  const db = createAnonClient();
+  const { data, error } = await db
+    .from("holdings_snapshots")
+    .select("stock_id, quantity, market_value_cr, weight_pct, stocks(display_name, sector, isin)")
+    .eq("family_id", familyId)
+    .eq("month", month)
+    .limit(2000);
+  if (error) throw new Error(error.message);
+  return (data || []).map((row) => {
+    const st = asOne(row.stocks);
+    return {
+      family_id: familyId,
+      stock_id: String(row.stock_id),
+      display_name: String(st?.display_name ?? ""),
+      sector: (st?.sector as string | null) ?? null,
+      isin: (st?.isin as string | null) ?? null,
+      quantity: Number(row.quantity),
+      market_value_cr: Number(row.market_value_cr),
+      weight_pct: Number(row.weight_pct),
+    };
+  });
+}
+
+export const getFundPayloadLive = unstable_cache(liveLoadFundPayload, ["fund-payload-equity-v10"], {
   revalidate: HOLDINGS_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS, CACHE_TAG_METRICS],
 });
+
+export async function getFundPayload(familyId: number, requestedMonth: string) {
+  const { getFundSnapshot, getLatestFundSnapshot } = await import("@/lib/snapshot-read");
+  if (requestedMonth) {
+    const hit = await getFundSnapshot(familyId, requestedMonth);
+    if (hit) return hit as Awaited<ReturnType<typeof liveLoadFundPayload>>;
+  } else {
+    const latest = await getLatestFundSnapshot(familyId);
+    if (latest) return latest.payload as Awaited<ReturnType<typeof liveLoadFundPayload>>;
+  }
+  return getFundPayloadLive(familyId, requestedMonth);
+}
+
+export async function getStockPayload(id: string, requestedMonth: string) {
+  const { getStockSnapshot, getLatestStockSnapshot } = await import("@/lib/snapshot-read");
+  if (requestedMonth) {
+    const hit = await getStockSnapshot(id, requestedMonth);
+    if (hit) return hit as Awaited<ReturnType<typeof liveLoadStockPayload>>;
+  } else {
+    const latest = await getLatestStockSnapshot(id);
+    if (latest) return latest.payload as Awaited<ReturnType<typeof liveLoadStockPayload>>;
+  }
+  return getStockPayloadLive(id, requestedMonth);
+}

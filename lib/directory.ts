@@ -88,48 +88,42 @@ async function loadStockDirectory(): Promise<{ month: string | null; stocks: Sto
   const month = months[0] ?? null;
   if (!month) return { month: null, stocks: [] };
   const db = createAnonClient();
-  const rows = await fetchAllRows<{ stock_id: string; family_id: number; stocks: unknown }>(() =>
+  const rows = await fetchAllRows<{ stock_id: string; fund_count: number; stocks: unknown }>(() =>
     db
-      .from("holdings_snapshots")
-      .select("stock_id, family_id, stocks(display_name, sector, isin)")
+      .from("stock_month_aggregates")
+      .select("stock_id, fund_count, stocks(display_name, sector, isin)")
       .eq("month", month),
   );
-  const byId = new Map<
-    string,
-    { stock_id: string; display_name: string; sector: string | null; isin: string | null; funds: Set<number> }
-  >();
+  const lines: {
+    stock_id: string;
+    display_name: string;
+    sector: string | null;
+    isin: string | null;
+    fund_count: number;
+  }[] = [];
   for (const row of rows) {
     const st = asOne(row.stocks);
     const display_name = String(st?.display_name ?? "");
     const sector = (st?.sector as string | null) ?? null;
     const isin = (st?.isin as string | null) ?? null;
     if (!isEquityInstrument({ display_name, sector, isin })) continue;
-    const cur = byId.get(row.stock_id) || {
+    lines.push({
       stock_id: row.stock_id,
       display_name: stripDuplicateMarkers(display_name),
       sector,
       isin,
-      funds: new Set<number>(),
-    };
-    cur.funds.add(Number(row.family_id));
-    byId.set(row.stock_id, cur);
+      fund_count: Number(row.fund_count) || 0,
+    });
   }
-  const grouped = groupDuplicateRows(
-    [...byId.values()].map((r) => ({
-      ...r,
-      fund_count: r.funds.size,
-    })),
-  );
+  const grouped = groupDuplicateRows(lines);
   const stocks = grouped
     .map((group) => {
       const canonical = [...group].sort((a, b) => b.fund_count - a.fund_count)[0];
-      const funds = new Set<number>();
-      for (const g of group) for (const id of g.funds) funds.add(id);
       return {
         id: canonical.stock_id,
         name: pickCleanestDisplayName(group.map((g) => g.display_name)),
         sector: instrumentSectorLabel(canonical) || "Unclassified",
-        fund_count: funds.size,
+        fund_count: Math.max(...group.map((g) => g.fund_count)),
         isin: canonical.isin,
       };
     })
@@ -138,12 +132,36 @@ async function loadStockDirectory(): Promise<{ month: string | null; stocks: Sto
   return { month, stocks };
 }
 
-export const getFundDirectory = unstable_cache(loadFundDirectory, ["fund-directory-v1"], {
+const getFundDirectoryLive = unstable_cache(loadFundDirectory, ["fund-directory-v1"], {
   revalidate: HOLDINGS_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS, CACHE_TAG_METRICS],
 });
 
-export const getStockDirectory = unstable_cache(loadStockDirectory, ["stock-directory-v3"], {
+const getStockDirectoryLive = unstable_cache(loadStockDirectory, ["stock-directory-v4"], {
   revalidate: HOLDINGS_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS],
 });
+
+export async function getFundDirectory() {
+  if (process.env.SNAPSHOT_BUILD === "1") return loadFundDirectory();
+  try {
+    const { getSiteMeta } = await import("@/lib/snapshot-read");
+    const meta = await getSiteMeta();
+    if (meta?.fundDirectory?.length) return meta.fundDirectory;
+  } catch {
+    /* fall through */
+  }
+  return getFundDirectoryLive();
+}
+
+export async function getStockDirectory() {
+  if (process.env.SNAPSHOT_BUILD === "1") return loadStockDirectory();
+  try {
+    const { getSiteMeta } = await import("@/lib/snapshot-read");
+    const meta = await getSiteMeta();
+    if (meta?.stockDirectory) return meta.stockDirectory;
+  } catch {
+    /* fall through */
+  }
+  return getStockDirectoryLive();
+}

@@ -41,5 +41,8 @@ export async function fetchAllRows<T>(
     out.push(...data);
     if (data.length < page) break;
   }
+  if (out.length > 1000) {
+    console.warn(`[supabase] query returned ${out.length} rows`);
+  }
   return out;
 }

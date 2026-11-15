@@ -12,7 +12,7 @@ import {
 import { listCompleteMonths, listFamilyMonths } from "@/lib/holdings-month";
 import { CACHE_TAG_HOLDINGS, CACHE_TAG_METRICS, HOLDINGS_REVALIDATE_SEC } from "@/lib/http-cache";
 import { asOne } from "@/lib/rel";
-import { createAnonClient, fetchAllRows } from "@/lib/supabase";
+import { createAnonClient } from "@/lib/supabase";
 
 export type OverlapFundInfo = {
   code: string;
@@ -55,10 +55,24 @@ async function loadFundMeta(codes: string[]) {
     .select("scheme_code, aum_cr, category")
     .in("scheme_code", codes);
   const metricBy = new Map((metrics || []).map((m) => [String(m.scheme_code), m]));
-  const complete = await listCompleteMonths();
   const monthsByCode = new Map<string, string[]>();
+  const complete = await listCompleteMonths();
   await Promise.all(
     codes.map(async (code) => {
+      const { data, error } = await db
+        .from("fund_snapshot")
+        .select("payload")
+        .eq("family_id", Number(code))
+        .order("month", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const fromSnap = !error
+        ? (((data?.payload as { availableMonths?: string[] } | null)?.availableMonths || []) as string[])
+        : [];
+      if (fromSnap.length) {
+        monthsByCode.set(code, fromSnap);
+        return;
+      }
       monthsByCode.set(code, await listFamilyMonths(db, Number(code), complete));
     }),
   );
@@ -77,31 +91,56 @@ async function loadFundMeta(codes: string[]) {
   return { funds, monthsByCode };
 }
 
+async function loadBookFromHoldings(familyId: number, month: string): Promise<OverlapLine[]> {
+  const db = createAnonClient();
+  const { data, error } = await db
+    .from("holdings_snapshots")
+    .select("stock_id, weight_pct, stocks(display_name, sector, isin)")
+    .eq("family_id", familyId)
+    .eq("month", month)
+    .limit(2000);
+  if (error) throw new Error(error.message);
+  return (data || []).map((row) => {
+    const st = asOne(row.stocks);
+    return {
+      stock_id: String(row.stock_id),
+      display_name: String(st?.display_name ?? "Unknown"),
+      sector: (st?.sector as string | null) ?? null,
+      isin: (st?.isin as string | null) ?? null,
+      weight_pct: Number(row.weight_pct) || 0,
+    };
+  });
+}
+
 async function loadBooks(codes: string[], month: string) {
   const db = createAnonClient();
   const books: { code: string; holdings: OverlapLine[] }[] = [];
   for (const code of codes) {
-    const snaps = await fetchAllRows<{
-      stock_id: string;
-      weight_pct: number;
-      stocks: unknown;
-    }>(() =>
-      db
-        .from("holdings_snapshots")
-        .select("stock_id, weight_pct, stocks(display_name, sector, isin)")
-        .eq("family_id", Number(code))
-        .eq("month", month),
-    );
-    const holdings: OverlapLine[] = snaps.map((s) => {
-      const st = asOne(s.stocks);
-      return {
-        stock_id: s.stock_id as string,
-        display_name: String(st?.display_name ?? "Unknown"),
-        sector: (st?.sector as string | null) ?? null,
-        isin: (st?.isin as string | null) ?? null,
-        weight_pct: Number(s.weight_pct) || 0,
-      };
-    });
+    const { data, error } = await db
+      .from("fund_snapshot")
+      .select("payload")
+      .eq("family_id", Number(code))
+      .eq("month", month)
+      .maybeSingle();
+    const rows = !error
+      ? (((data?.payload as { holdings?: OverlapLine[] } | null)?.holdings || []) as Array<{
+          stock_id: string;
+          display_name: string;
+          sector: string | null;
+          isin?: string | null;
+          weight_pct: number;
+        }>)
+      : [];
+    const holdings: OverlapLine[] =
+      rows.length > 0
+        ? rows.map((s) => ({
+            stock_id: s.stock_id,
+            display_name: String(s.display_name ?? "Unknown"),
+            sector: s.sector ?? null,
+            isin: s.isin ?? null,
+            weight_pct: Number(s.weight_pct) || 0,
+          }))
+        : await loadBookFromHoldings(Number(code), month);
     books.push({ code, holdings });
   }
   return alignBooks(books);
@@ -153,7 +192,7 @@ export const getOverlap = unstable_cache(loadOverlap, ["fund-overlap-v1"], {
   tags: [CACHE_TAG_HOLDINGS, CACHE_TAG_METRICS],
 });
 
-async function loadOverlapSuggestions(): Promise<OverlapSuggestion[]> {
+export async function loadOverlapSuggestions(): Promise<OverlapSuggestion[]> {
   const db = createAnonClient();
   const { data: families, error } = await db
     .from("families")
@@ -214,10 +253,22 @@ async function loadOverlapSuggestions(): Promise<OverlapSuggestion[]> {
   return pairs;
 }
 
-export const getOverlapSuggestions = unstable_cache(loadOverlapSuggestions, ["overlap-suggest-v1"], {
+const getOverlapSuggestionsLive = unstable_cache(loadOverlapSuggestions, ["overlap-suggest-v1"], {
   revalidate: HOLDINGS_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS, CACHE_TAG_METRICS],
 });
+
+export async function getOverlapSuggestions() {
+  if (process.env.SNAPSHOT_BUILD === "1") return getOverlapSuggestionsLive();
+  try {
+    const { getSiteMeta } = await import("@/lib/snapshot-read");
+    const meta = await getSiteMeta();
+    if (meta?.overlapSuggestions?.length) return meta.overlapSuggestions;
+  } catch {
+    /* fall through */
+  }
+  return getOverlapSuggestionsLive();
+}
 
 export async function loadOverlapPage(codes: string[], requestedMonth: string) {
   if (codes.length < 2) {

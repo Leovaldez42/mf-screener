@@ -13,7 +13,23 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
-import type { SearchHit, SearchResponse, SearchSuggestion } from "@/lib/search";
+import { searchCatalogFrom, type SearchHit, type SearchIndex, type SearchResponse, type SearchSuggestion } from "@/lib/search";
+
+let indexPromise: Promise<SearchIndex | null> | null = null;
+
+function usableIndex(index: SearchIndex | null | undefined): index is SearchIndex {
+  return Boolean(index && (index.funds.length > 0 || index.stocks.length > 0));
+}
+
+function loadSearchIndex() {
+  if (!indexPromise) {
+    indexPromise = fetch("/search-index.json")
+      .then((r) => (r.ok ? (r.json() as Promise<SearchIndex>) : Promise.reject(new Error("no index"))))
+      .then((index) => (usableIndex(index) ? index : null))
+      .catch(() => null);
+  }
+  return indexPromise;
+}
 
 const SearchCtx = createContext<{
   open: () => void;
@@ -158,11 +174,20 @@ function SearchDialog({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const ac = new AbortController();
     const t = window.setTimeout(() => {
-      fetch(`/api/v1/search?q=${encodeURIComponent(q.trim())}`, { signal: ac.signal })
-        .then((r) => r.json())
-        .then((d: SearchResponse) => {
-          setData(d);
-          setActive(0);
+      loadSearchIndex()
+        .then((index) => {
+          if (ac.signal.aborted) return;
+          if (usableIndex(index)) {
+            setData(searchCatalogFrom(index, q.trim()));
+            setActive(0);
+            return;
+          }
+          return fetch(`/api/v1/search?q=${encodeURIComponent(q.trim())}`, { signal: ac.signal })
+            .then((r) => r.json())
+            .then((d: SearchResponse) => {
+              setData(d);
+              setActive(0);
+            });
         })
         .catch(() => undefined);
     }, q ? 80 : 0);

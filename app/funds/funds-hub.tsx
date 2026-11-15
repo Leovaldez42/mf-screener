@@ -24,7 +24,7 @@ type OverlapInit = {
 };
 
 export function FundsHub({
-  tab,
+  tab: tabProp,
   fundCount,
   houseCount,
   funds,
@@ -38,6 +38,7 @@ export function FundsHub({
 }) {
   const pathname = usePathname();
   const search = useSearchParams();
+  const tab = parseFundsTab(search.get("tab") || tabProp);
   const [stored, setStored] = useState<Record<FundsTab, string>>(() => ({
     screener: pickTabParams("screener", search).toString(),
     compare: pickTabParams("compare", search).toString(),

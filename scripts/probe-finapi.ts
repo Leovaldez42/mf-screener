@@ -29,7 +29,7 @@ function loadEnv() {
 loadEnv();
 
 const KEY = process.env.FINAPI_API_KEY;
-const BASE = (process.env.FINAPI_BASE || "https://finapi.upvaly.com").replace(/\/$/, "");
+const BASE = (process.env.FINAPI_BASE || "https://fin.ejiapi.com").replace(/\/$/, "");
 
 function walk(value: unknown, path: string, out: string[], depth: number) {
   if (depth > 6) return;
@@ -56,7 +56,7 @@ function walk(value: unknown, path: string, out: string[], depth: number) {
 
 async function get(path: string) {
   const res = await fetch(`${BASE}${path}`, {
-    headers: { Accept: "application/json", "X-API-Key": KEY as string },
+    headers: { Accept: "application/json", "x-api-key": KEY as string },
   });
   const text = await res.text();
   let json: unknown = text;

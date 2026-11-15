@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   instrumentSectorLabel,
+  fundPortfolioSector,
+  isCashLikeNonEquity,
   isEquityInstrument,
   mergeChaseDuplicates,
   nonEquityPattern,
@@ -29,6 +31,11 @@ describe("isEquityInstrument", () => {
     for (const row of keep) {
       assert.equal(isEquityInstrument(row), true, JSON.stringify(row));
     }
+  });
+
+  it("treats CCIL / Clearing Corporation of India as cash", () => {
+    assert.equal(isCashLikeNonEquity({ display_name: "Clearing Corporation of India Ltd" }), true);
+    assert.equal(nonEquityPattern({ display_name: "Clearing Corporation of India Ltd" }), "cash_equiv");
   });
 
   it("drops TREPS / repo / CBLO", () => {
@@ -124,6 +131,13 @@ describe("isEquityInstrument", () => {
     assert.equal(nonEquityPattern({ display_name: "WCM Global Equity Fund" }), "mf_unit");
     assert.equal(nonEquityPattern({ display_name: "Harding Loevner Global Equity Fund" }), "mf_unit");
     assert.equal(isEquityInstrument({ display_name: "SBI Funds Management Limited", sector: "" }), true);
+  });
+
+  it("keeps REITs in the fund-page sector map as their industry", () => {
+    assert.equal(
+      fundPortfolioSector({ display_name: "Embassy Office Parks REIT", sector: "Realty" }),
+      "Realty",
+    );
   });
 
   it("drops REITs and InvITs", () => {

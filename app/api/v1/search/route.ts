@@ -1,9 +1,10 @@
 import { NextRequest } from "next/server";
-import { HOLDINGS_CACHE_CONTROL, jsonCached, jsonNoStore } from "@/lib/http-cache";
-import { searchCatalog } from "@/lib/search";
+import { SNAPSHOT_CACHE_CONTROL, jsonCached, jsonNoStore } from "@/lib/http-cache";
+import { searchCatalogFrom } from "@/lib/search";
+import { getSearchIndex } from "@/lib/search-index";
 import { supabaseConfigured } from "@/lib/supabase";
 
-export const revalidate = 300;
+export const revalidate = 86400;
 
 export async function GET(req: NextRequest) {
   if (!supabaseConfigured()) {
@@ -15,11 +16,9 @@ export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get("q") || "";
   try {
     const t0 = Date.now();
-    const result = await searchCatalog(q);
-    return jsonCached(
-      { ...result, ms: Date.now() - t0 },
-      HOLDINGS_CACHE_CONTROL,
-    );
+    const index = await getSearchIndex();
+    const result = searchCatalogFrom(index, q);
+    return jsonCached({ ...result, ms: Date.now() - t0 }, SNAPSHOT_CACHE_CONTROL);
   } catch (e) {
     return jsonNoStore(
       { error: e instanceof Error ? e.message : "search_failed", funds: [], stocks: [], suggestions: [], lead: "funds", fundTotal: 0, stockTotal: 0 },

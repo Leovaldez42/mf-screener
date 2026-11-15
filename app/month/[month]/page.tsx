@@ -7,8 +7,23 @@ import { formatMonthLabel, formatNumber, isJunkSector, sectorLabel } from "@/lib
 import { listCompleteMonths } from "@/lib/holdings-month";
 import { monthShareCaption } from "@/lib/share-text";
 import { isYearMonth, ogMonthPath, SITE_URL, siteUrl } from "@/lib/site";
+import { getSiteMeta } from "@/lib/snapshot-read";
+import { supabaseConfigured } from "@/lib/supabase";
+
+export const revalidate = 86400;
+export const dynamicParams = true;
 
 type Props = { params: Promise<{ month: string }> };
+
+export async function generateStaticParams() {
+  if (!supabaseConfigured()) return [];
+  try {
+    const meta = await getSiteMeta();
+    return (meta?.months || []).map((month) => ({ month }));
+  } catch {
+    return [];
+  }
+}
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { month: raw } = await params;

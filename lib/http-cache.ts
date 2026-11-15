@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 
-export const HOLDINGS_REVALIDATE_SEC = 300;
+export const HOLDINGS_REVALIDATE_SEC = 86400;
+export const PAGE_REVALIDATE_SEC = 86400;
+export const SNAPSHOT_CACHE_CONTROL =
+  "public, s-maxage=86400, stale-while-revalidate=604800";
 export const METRICS_REVALIDATE_SEC = 120;
 export const CACHE_TAG_HOLDINGS = "holdings";
 export const CACHE_TAG_METRICS = "metrics";

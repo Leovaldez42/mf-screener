@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import { pageMetadata } from "@/lib/page-meta";
 import { createAnonClient, supabaseConfigured } from "@/lib/supabase";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 120;
+export const revalidate = 86400;
 
 export const metadata: Metadata = pageMetadata({
   title: "Data · Thinkbrew",
@@ -34,7 +33,7 @@ export default async function DataPage() {
       const db = createAnonClient();
       const { data, error: qErr } = await db
         .from("ingest_runs")
-        .select("*")
+        .select("id, source, started_at, finished_at, status, months, families_ok, families_fail, notes")
         .order("started_at", { ascending: false })
         .limit(20);
       if (qErr) error = qErr.message;

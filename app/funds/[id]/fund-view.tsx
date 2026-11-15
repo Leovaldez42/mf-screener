@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { DataAsOfNote, Delta, NetBoughtLabel, UnavailableMonthNote } from "@/components/ui";
 import { FundSectorMap } from "@/components/fund-sector-map";
 import { formatMonthLabel, formatNumber } from "@/lib/format";
-import { instrumentSectorLabel, isCashLikeNonEquity, isEquityInstrument } from "@/lib/instruments";
+import { fundPortfolioSector } from "@/lib/instruments";
 
 type Holding = {
   stock_id: string;
@@ -22,9 +22,7 @@ type Holding = {
 };
 
 function holdingSectorLabel(h: Holding): string {
-  if (isEquityInstrument(h)) return instrumentSectorLabel(h);
-  if (isCashLikeNonEquity(h)) return "Cash & others";
-  return "Other instruments";
+  return fundPortfolioSector(h);
 }
 
 export type FundViewPayload = {
@@ -69,8 +67,26 @@ export function FundView({
   requestedMonth: string;
 }) {
   const router = useRouter();
-  const data = initial;
-  const requested = requestedMonth;
+  const search = useSearchParams();
+  const requested = search.get("month") || requestedMonth || "";
+  const [data, setData] = useState<FundViewPayload>(initial);
+
+  useEffect(() => {
+    if (!requested || requested === (initial.month || "")) {
+      queueMicrotask(() => setData(initial));
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/v1/funds/${fundId}?month=${encodeURIComponent(requested)}`)
+      .then((r) => r.json())
+      .then((d: FundViewPayload) => {
+        if (!cancelled) setData(d);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [requested, fundId, initial]);
   const [sortKey, setSortKey] = useState<SortKey>("weight_pct");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 

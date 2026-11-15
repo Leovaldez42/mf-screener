@@ -1,7 +1,8 @@
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import { normalizeNameKey, slugifyAmc } from "../lib/equity";
-import { sectorFromHolding } from "../lib/format";
+import { canonicalizeSector, sectorFromHolding } from "../lib/format";
+import { effectiveIsin } from "../lib/instruments";
 import { createServiceClient, fetchAllRows } from "../lib/supabase";
 import { notifyRevalidate } from "../lib/notify-revalidate";
 import type { HoldingEvent } from "../lib/types";
@@ -27,7 +28,7 @@ function loadEnv() {
 
 loadEnv();
 
-const BASE = (process.env.FINAPI_BASE || "https://finapi.upvaly.com").replace(/\/$/, "");
+const BASE = (process.env.FINAPI_BASE || "https://fin.ejiapi.com").replace(/\/$/, "");
 const KEY = process.env.FINAPI_API_KEY;
 const LIMIT = Number(process.env.INGEST_HOLDINGS_LIMIT || "0");
 const MONTHS = Math.min(24, Math.max(2, Number(process.env.INGEST_HOLDINGS_MONTHS || "12")));
@@ -115,6 +116,34 @@ function fromFinAsOf(asOf: unknown): string | null {
   if (mmyyyy) return `${mmyyyy[2]}-${mmyyyy[1]}`;
   const yyyymm = s.match(/^(\d{4})-(\d{2})/);
   if (yyyymm) return `${yyyymm[1]}-${yyyymm[2]}`;
+  return null;
+}
+
+const MONTH_NAMES = [
+  "january",
+  "february",
+  "march",
+  "april",
+  "may",
+  "june",
+  "july",
+  "august",
+  "september",
+  "october",
+  "november",
+  "december",
+];
+
+function fromFinHistoryEntry(entry: Record<string, unknown>): string | null {
+  const fromAsOf = fromFinAsOf(entry.holdingsAsOf) || fromFinAsOf(entry.month);
+  if (fromAsOf) return fromAsOf;
+  if (entry.holdingsYear == null || entry.holdingsMonth == null) return null;
+  const year = String(entry.holdingsYear);
+  const raw = String(entry.holdingsMonth).trim();
+  const n = Number(raw);
+  if (Number.isFinite(n) && n >= 1 && n <= 12) return `${year}-${String(n).padStart(2, "0")}`;
+  const idx = MONTH_NAMES.indexOf(raw.toLowerCase());
+  if (idx >= 0) return `${year}-${String(idx + 1).padStart(2, "0")}`;
   return null;
 }
 
@@ -210,7 +239,7 @@ async function finget(path: string): Promise<unknown> {
   for (let attempt = 0; attempt < 6; attempt++) {
     try {
       const res = await fetch(url, {
-        headers: { "X-API-Key": KEY! },
+        headers: { "x-api-key": KEY!, Accept: "application/json" },
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
       const text = await res.text();
@@ -221,6 +250,9 @@ async function finget(path: string): Promise<unknown> {
       if (transient) {
         await sleep(2000 * (attempt + 1));
         continue;
+      }
+      if (res.status === 404) {
+        return { data: { holdingsHistory: [] } };
       }
       if (!res.ok) {
         throw new Error(`FinAPI ${res.status}: ${text.slice(0, 200)}`);
@@ -239,6 +271,7 @@ type StockRow = { id: string; name_key: string; sector: string };
 type HoldingRow = {
   name?: string;
   isin?: string;
+  sector?: string;
   sectorClassification?: {
     broaderIndustry?: string | null;
     industry?: string | null;
@@ -273,7 +306,7 @@ async function main() {
     months = months.slice(0, -1);
   }
   const start = months[months.length - 1];
-  const chunks = rangeChunks(months, 1);
+  const chunks = rangeChunks(months, 11);
 
   const { data: run, error: runErr } = await db
     .from("ingest_runs")
@@ -309,9 +342,9 @@ async function main() {
   async function upsertStock(h: HoldingRow): Promise<string | null> {
     const display = (h.name || "").trim();
     if (!display) return null;
-    const sector = sectorFromHolding(h);
+    const sector = sectorFromHolding(h) || canonicalizeSector(h.sector || "");
     const name_key = normalizeNameKey(display);
-    const isin = h.isin?.trim() || null;
+    const isin = effectiveIsin(h.isin);
     const cacheKeys = [`${name_key}|${sector}`, ...(isin ? [`isin:${isin}`] : [])];
     const cached = cacheKeys.map((k) => stockCache.get(k)).find(Boolean);
     if (cached) {
@@ -455,11 +488,7 @@ async function main() {
           };
           const history = json.data?.holdingsHistory || [];
           for (const entry of history) {
-            const month =
-              fromFinAsOf(entry.holdingsAsOf) ||
-              (entry.holdingsYear != null && entry.holdingsMonth != null
-                ? `${entry.holdingsYear}-${String(entry.holdingsMonth).padStart(2, "0")}`
-                : null);
+            const month = fromFinHistoryEntry(entry);
             if (!month) continue;
             const list = (entry.holdings as HoldingRow[]) || [];
             byMonth.set(month, list);

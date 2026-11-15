@@ -28,6 +28,7 @@ Empty [Supabase](https://supabase.com) project. Run these SQL files in the edito
 2. [`supabase/migrations/20260829010000_scheme_metrics.sql`](supabase/migrations/20260829010000_scheme_metrics.sql)
 3. [`supabase/migrations/20260903000000_scheme_metrics_pe.sql`](supabase/migrations/20260903000000_scheme_metrics_pe.sql)
 4. [`supabase/migrations/20260913000000_scheme_metrics_asset_class.sql`](supabase/migrations/20260913000000_scheme_metrics_asset_class.sql)
+5. [`supabase/migrations/20261017000000_monthly_snapshots.sql`](supabase/migrations/20261017000000_monthly_snapshots.sql)
 
 Copy [`.env.example`](.env.example) to `.env.local` and fill the keys (Supabase + `FINAPI_API_KEY`). Extra ingest knobs are documented there.
 
@@ -35,10 +36,13 @@ Copy [`.env.example`](.env.example) to `.env.local` and fill the keys (Supabase 
 npm install
 npm run ingest:metrics   # schemes first
 npm run ingest           # then holdings
+npm run snapshots        # precompute monthly JSON (report, funds, stocks, search index)
 npm run dev              # http://localhost:3000
 ```
 
 Metrics before holdings. First ingest takes a while.
+
+After each monthly holdings load, run **`npm run snapshots`**. That writes `report_snapshot`, `fund_snapshot`, `stock_snapshot`, and `site_snapshot` in Supabase, plus `public/search-index.json`. Pages and holdings APIs read those rows; they do not recompute month-on-month at request time. Apply [`supabase/migrations/20261017000000_monthly_snapshots.sql`](supabase/migrations/20261017000000_monthly_snapshots.sql) once before the first snapshot run. Optional: `SNAPSHOT_MONTH=2026-08 npm run snapshots` to rebuild one month.
 
 ## Deploy
 

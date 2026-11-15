@@ -29,7 +29,19 @@ async function loadDataFreshness(): Promise<DataFreshness> {
   };
 }
 
-export const getDataFreshness = unstable_cache(loadDataFreshness, ["data-freshness-v1"], {
+const getDataFreshnessLive = unstable_cache(loadDataFreshness, ["data-freshness-v1"], {
   revalidate: HOLDINGS_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS, CACHE_TAG_METRICS],
 });
+
+export async function getDataFreshness(): Promise<DataFreshness> {
+  if (process.env.SNAPSHOT_BUILD === "1") return loadDataFreshness();
+  try {
+    const { getSiteMeta } = await import("@/lib/snapshot-read");
+    const meta = await getSiteMeta();
+    if (meta?.freshness) return meta.freshness;
+  } catch {
+    /* fall through */
+  }
+  return getDataFreshnessLive();
+}
