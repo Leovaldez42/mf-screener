@@ -32,11 +32,6 @@ create table public.site_snapshot (
 create index fund_snapshot_month_idx on public.fund_snapshot (month);
 create index stock_snapshot_month_idx on public.stock_snapshot (month);
 
--- Extra lookup paths for holdings (table is holdings_snapshots; family_id is the fund id).
-create index if not exists holdings_snapshots_family_month_idx
-  on public.holdings_snapshots (family_id, month);
-create index if not exists stocks_isin_month_lookup_idx on public.stocks (isin);
-
 alter table public.report_snapshot enable row level security;
 alter table public.fund_snapshot enable row level security;
 alter table public.stock_snapshot enable row level security;

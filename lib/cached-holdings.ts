@@ -5,6 +5,7 @@ import { listCompleteMonths, listFamilyMonths, previousMonth } from "@/lib/holdi
 import { pickHoldingsMonth } from "@/lib/holdings-month-pick";
 import { CACHE_TAG_HOLDINGS, CACHE_TAG_METRICS, HOLDINGS_REVALIDATE_SEC } from "@/lib/http-cache";
 import { asOne } from "@/lib/rel";
+import { loadStockBooks, queryMonthFamilyIds } from "@/lib/stock-book";
 import { createAnonClient, fetchAllRows } from "@/lib/supabase";
 import {
   fundPortfolioSector,
@@ -29,7 +30,12 @@ export async function loadMonthSnapshots(month: string): Promise<SnapshotLine[]>
     db
       .from("holdings_snapshots")
       .select("family_id, stock_id, quantity, market_value_cr, weight_pct, stocks(display_name, sector, isin)")
-      .eq("month", month),
+      .eq("month", month)
+      .order("family_id")
+      .order("stock_id"),
+    500,
+    500000,
+    1,
   );
   const out: SnapshotLine[] = [];
   for (const row of rows) {
@@ -71,17 +77,23 @@ export function getCanonicalBook(month: string) {
   return pending;
 }
 
-async function loadChaseRows(month: string): Promise<ChaseRow[]> {
-  const { getReportSnapshot } = await import("@/lib/snapshot-read");
+async function loadChaseBook(month: string): Promise<{ chase: ChaseRow[]; excludedNoPriorMonth: number }> {
+  const { getReportSnapshot, noteLiveFallback } = await import("@/lib/snapshot-read");
   const snap = await getReportSnapshot(month);
-  if (snap) return snap.chase;
-  return (await getCanonicalBook(month)).chase;
+  if (snap) return { chase: snap.chase, excludedNoPriorMonth: snap.excludedNoPriorMonth };
+  noteLiveFallback("chase", month);
+  const book = await getCanonicalBook(month);
+  return { chase: book.chase, excludedNoPriorMonth: book.excludedNoPriorMonth };
 }
 
-export const getChaseRows = unstable_cache(loadChaseRows, ["chase-rows-equity-v8"], {
+export const getChaseBook = unstable_cache(loadChaseBook, ["chase-book-equity-v9"], {
   revalidate: HOLDINGS_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS],
 });
+
+export async function getChaseRows(month: string): Promise<ChaseRow[]> {
+  return (await getChaseBook(month)).chase;
+}
 
 async function loadChasePreview(month: string): Promise<{ inflows: ChaseRow[]; outflows: ChaseRow[] }> {
   const rows = await getChaseRows(month);
@@ -102,11 +114,12 @@ export const getChasePreview = unstable_cache(loadChasePreview, ["chase-preview"
 });
 
 async function loadSectorRows(month: string) {
-  const { getReportSnapshot } = await import("@/lib/snapshot-read");
+  const { getReportSnapshot, noteLiveFallback } = await import("@/lib/snapshot-read");
   const snap = await getReportSnapshot(month);
   if (snap) {
     return { excludedNoPriorMonth: snap.excludedNoPriorMonth, rows: snap.sectors };
   }
+  noteLiveFallback("sectors", month);
   const book = await getCanonicalBook(month);
   const map = new Map<string, { net_value_delta_cr: number; net_qty_delta: number }>();
   for (const d of book.deltas) {
@@ -147,13 +160,13 @@ async function loadHoldingsCoverage(month: string): Promise<HoldingsCoverage> {
     }
   }
   const db = createAnonClient();
-  const families = await fetchAllRows<{ id: number; amc_slug: string | null }>(() =>
-    db.from("families").select("id, amc_slug"),
-  );
-  const snaps = await fetchAllRows<{ family_id: number }>(() =>
-    db.from("holdings_snapshots").select("family_id").eq("month", month),
-  );
-  const haveFamilies = new Set(snaps.map((s) => s.family_id));
+  const [families, familyIds] = await Promise.all([
+    fetchAllRows<{ id: number; amc_slug: string | null }>(() =>
+      db.from("families").select("id, amc_slug").order("id"),
+    ),
+    queryMonthFamilyIds(db, month),
+  ]);
+  const haveFamilies = new Set(familyIds);
   const amcOf = (slug: string | null) => (slug || "").trim().toLowerCase();
   const totalAmcs = new Set(families.map((f) => amcOf(f.amc_slug)).filter(Boolean));
   const haveAmcs = new Set(
@@ -173,6 +186,17 @@ const getHoldingsCoverageCached = unstable_cache(loadHoldingsCoverage, ["holding
 export async function getHoldingsCoverage(month: string): Promise<HoldingsCoverage> {
   if (process.env.SNAPSHOT_BUILD === "1") return loadHoldingsCoverage(month);
   return getHoldingsCoverageCached(month);
+}
+
+const getMonthFamilyIdsCached = unstable_cache(
+  (month: string) => queryMonthFamilyIds(createAnonClient(), month),
+  ["month-family-ids"],
+  { revalidate: HOLDINGS_REVALIDATE_SEC, tags: [CACHE_TAG_HOLDINGS] },
+);
+
+export function getMonthFamilyIds(month: string): Promise<number[]> {
+  if (process.env.SNAPSHOT_BUILD === "1") return queryMonthFamilyIds(createAnonClient(), month);
+  return getMonthFamilyIdsCached(month);
 }
 
 export async function resolveHoldingsMonth(requested: string | null): Promise<string | null> {
@@ -223,13 +247,14 @@ export async function liveLoadStockPayload(id: string, requestedMonth: string) {
   };
 
   const complete = await listCompleteMonths();
-  const books = await Promise.all(complete.map((m) => getCanonicalBook(m)));
-  const history = books
-    .map((book, i) => {
-      const canonicalId = book.aliasToCanonical[id] || id;
-      const row = book.chase.find((r) => r.stock_id === canonicalId);
+  const books = await loadStockBooks(db, id, complete, getMonthFamilyIds);
+  const history = complete
+    .map((month) => {
+      const book = books.get(month);
+      const canonicalId = book?.aliasToCanonical[id] || id;
+      const row = book?.chase.find((r) => r.stock_id === canonicalId);
       return {
-        month: complete[i],
+        month,
         fund_count: row?.fund_count ?? 0,
         fund_count_delta: row?.fund_count_delta ?? 0,
       };
@@ -238,11 +263,11 @@ export async function liveLoadStockPayload(id: string, requestedMonth: string) {
 
   const monthToUse =
     requestedMonth && complete.includes(requestedMonth) ? requestedMonth : history[0]?.month;
-  if (!monthToUse) {
+  const book = monthToUse ? books.get(monthToUse) : undefined;
+  if (!monthToUse || !book) {
     return { stock, month: null, history: [], holders: [], summary: null };
   }
 
-  const book = books[complete.indexOf(monthToUse)] || (await getCanonicalBook(monthToUse));
   const canonicalId = book.aliasToCanonical[id] || id;
   const meta = book.stocks[canonicalId];
   if (meta) {
@@ -297,7 +322,7 @@ export async function liveLoadStockPayload(id: string, requestedMonth: string) {
   return { stock, month: monthToUse, history, holders, summary };
 }
 
-export const getStockPayloadLive = unstable_cache(liveLoadStockPayload, ["stock-payload-v8"], {
+export const getStockPayloadLive = unstable_cache(liveLoadStockPayload, ["stock-payload-v9"], {
   revalidate: HOLDINGS_REVALIDATE_SEC,
   tags: [CACHE_TAG_HOLDINGS],
 });
@@ -428,7 +453,7 @@ export const getFundPayloadLive = unstable_cache(liveLoadFundPayload, ["fund-pay
 });
 
 export async function getFundPayload(familyId: number, requestedMonth: string) {
-  const { getFundSnapshot, getLatestFundSnapshot } = await import("@/lib/snapshot-read");
+  const { getFundSnapshot, getLatestFundSnapshot, noteLiveFallback } = await import("@/lib/snapshot-read");
   if (requestedMonth) {
     const hit = await getFundSnapshot(familyId, requestedMonth);
     if (hit) return hit as Awaited<ReturnType<typeof liveLoadFundPayload>>;
@@ -436,11 +461,12 @@ export async function getFundPayload(familyId: number, requestedMonth: string) {
     const latest = await getLatestFundSnapshot(familyId);
     if (latest) return latest.payload as Awaited<ReturnType<typeof liveLoadFundPayload>>;
   }
+  noteLiveFallback("fund", familyId);
   return getFundPayloadLive(familyId, requestedMonth);
 }
 
 export async function getStockPayload(id: string, requestedMonth: string) {
-  const { getStockSnapshot, getLatestStockSnapshot } = await import("@/lib/snapshot-read");
+  const { getStockSnapshot, getLatestStockSnapshot, noteLiveFallback } = await import("@/lib/snapshot-read");
   if (requestedMonth) {
     const hit = await getStockSnapshot(id, requestedMonth);
     if (hit) return hit as Awaited<ReturnType<typeof liveLoadStockPayload>>;
@@ -448,5 +474,6 @@ export async function getStockPayload(id: string, requestedMonth: string) {
     const latest = await getLatestStockSnapshot(id);
     if (latest) return latest.payload as Awaited<ReturnType<typeof liveLoadStockPayload>>;
   }
+  noteLiveFallback("stock", id);
   return getStockPayloadLive(id, requestedMonth);
 }

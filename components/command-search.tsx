@@ -264,7 +264,7 @@ function SearchDialog({ onClose }: { onClose: () => void }) {
         role="dialog"
         aria-modal="true"
         aria-label="Search funds and stocks"
-        className="fixed inset-0 flex flex-col bg-card md:absolute md:inset-auto md:left-1/2 md:top-[15vh] md:max-h-[70vh] md:w-full md:max-w-[640px] md:-translate-x-1/2 md:overflow-hidden md:rounded-lg md:border md:border-border md:shadow-lg"
+        className="fixed inset-0 flex flex-col bg-card md:absolute md:inset-auto md:left-1/2 md:top-[15vh] md:max-h-[70vh] md:w-full md:max-w-160 md:-translate-x-1/2 md:overflow-hidden md:rounded-lg md:border md:border-border md:shadow-lg"
       >
         <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
           <SearchIcon className="h-4 w-4 shrink-0 text-muted" />

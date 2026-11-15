@@ -8,7 +8,7 @@ import { getSiteMeta } from "@/lib/snapshot-read";
 import { supabaseConfigured } from "@/lib/supabase";
 import { FundView, type FundViewPayload } from "./fund-view";
 
-export const revalidate = 86400;
+export const revalidate = 2592000;
 export const dynamicParams = true;
 
 type Props = { params: Promise<{ id: string }> };

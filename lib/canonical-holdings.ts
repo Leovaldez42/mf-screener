@@ -144,10 +144,15 @@ function collapseByCanonical(
   return out;
 }
 
+/**
+ * `universe` lists every fund with a book in each month. Pass it when `current`/`prior` are a slice
+ * (e.g. one stock's lines), so funds that do not hold the stock still count toward the comparable set.
+ */
 export function computeCanonicalBook(
   month: string,
   current: SnapshotLine[],
   prior: SnapshotLine[],
+  universe?: { current: number[]; prior: number[] },
 ): CanonicalBook {
   const currentCountById: Record<string, number> = {};
   for (const line of current) currentCountById[line.stock_id] = (currentCountById[line.stock_id] || 0) + 1;
@@ -155,8 +160,8 @@ export function computeCanonicalBook(
   const curMap = collapseByCanonical(current, aliasToCanonical);
   const prevMap = collapseByCanonical(prior, aliasToCanonical);
 
-  const currentFamilyIds = [...new Set(current.map((r) => r.family_id))];
-  const priorFamilyIds = [...new Set(prior.map((r) => r.family_id))];
+  const currentFamilyIds = universe?.current ?? [...new Set(current.map((r) => r.family_id))];
+  const priorFamilyIds = universe?.prior ?? [...new Set(prior.map((r) => r.family_id))];
   const { included, excludedNoPriorMonth } = comparableFamilyIds(currentFamilyIds, priorFamilyIds);
 
   const keys = new Set([...curMap.keys(), ...prevMap.keys()]);

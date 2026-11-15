@@ -4,7 +4,7 @@ import { pageMetadata } from "@/lib/page-meta";
 import { supabaseConfigured } from "@/lib/supabase";
 import { StocksIndex } from "./stocks-index";
 
-export const revalidate = 86400;
+export const revalidate = 2592000;
 
 export const metadata: Metadata = pageMetadata({
   title: "Stocks held by Indian mutual funds · Thinkbrew",

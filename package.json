@@ -10,6 +10,7 @@
     "lint": "eslint . --no-warn-ignored",
     "test": "tsx --test lib/instruments.test.ts lib/inception-cagr.test.ts lib/holdings-month-pick.test.ts lib/fund-overlap.test.ts lib/monthly-report.test.ts lib/canonical-holdings.test.ts lib/search.test.ts lib/holding-flow.test.ts lib/snapshot-parity.test.ts",
     "snapshots": "tsx scripts/build-snapshots.ts",
+    "refresh": "INGEST_SKIP_REVALIDATE=1 INGEST_HOLDINGS_SKIP_EXISTING=0 INGEST_HOLDINGS_MONTHS=${INGEST_HOLDINGS_MONTHS:-2} tsx scripts/ingest-holdings.ts && tsx scripts/build-snapshots.ts",
     "ingest": "tsx scripts/ingest-holdings.ts",
     "ingest:aggregates": "INGEST_HOLDINGS_AGG_ONLY=1 tsx scripts/ingest-holdings.ts",
     "ingest:holdings:codes": "tsx scripts/ingest-holdings.ts",
@@ -21,9 +22,14 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
     "@tanstack/react-virtual": "^3.14.11",
-    "next": "16.3.4",
+    "next": "16.4.6",
     "react": "19.2.8",
     "react-dom": "19.2.8"
+  },
+  "overrides": {
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "^11.0.8"
+    }
   },
   "browserslist": [
     "chrome >= 111",
@@ -38,7 +44,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "eslint": "^9",
-    "eslint-config-next": "16.3.4",
+    "eslint-config-next": "16.4.6",
     "tailwindcss": "^4",
     "tsx": "^4.20.5",
     "typescript": "^5"
