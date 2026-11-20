@@ -16,6 +16,7 @@ const MAIN_PATHS = [
   "/how-we-calculate",
   "/data-sources",
   "/disclaimer",
+  "/support",
   "/reports",
   "/funds",
   "/stocks",

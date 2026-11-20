@@ -1,4 +1,6 @@
 export const SITE_URL = "https://www.thinkbrew.in";
+/** Public Buy Me a Chai page. Supporters pay that page over UPI. */
+export const CHAI_URL = "https://www.buymeachai.in/thinkbrew";
 export const OG_TEMPLATE_VERSION = "1";
 export const OG_SIZE = { width: 1200, height: 630 } as const;
 
