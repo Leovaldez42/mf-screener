@@ -206,6 +206,12 @@ function isResearchPath(pathname: string) {
   );
 }
 
+/** Production prerender names the homepage `/index`. The dev server names it `/`. */
+function shellPath(pathname: string | null): string {
+  if (!pathname || pathname === "/index") return "/";
+  return pathname;
+}
+
 function isWidePath(pathname: string) {
   return (
     isResearchPath(pathname) ||
@@ -284,6 +290,19 @@ function WatchlistIconLink() {
   );
 }
 
+function ChaiLink({ pathname, className = "" }: { pathname: string; className?: string }) {
+  const on = pathname === "/support";
+  return (
+    <Link
+      href="/support"
+      aria-current={on ? "page" : undefined}
+      className={`inline-flex h-8 shrink-0 items-center rounded-full bg-accent px-2.5 text-xs font-medium text-accent-fg hover:opacity-90 sm:px-3 sm:text-sm ${className}`}
+    >
+      Buy me a chai
+    </Link>
+  );
+}
+
 function OpenSourceLink({ className = "" }: { className?: string }) {
   return (
     <a
@@ -309,7 +328,7 @@ export function Shell({
   freshness?: DataFreshness | null;
   months?: string[];
 }) {
-  const pathname = usePathname();
+  const pathname = shellPath(usePathname());
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPath, setMenuPath] = useState(pathname);
   if (pathname !== menuPath) {
@@ -349,6 +368,7 @@ export function Shell({
               <ThemeToggle />
               <OpenSourceLink className="hidden lg:inline-flex" />
             </div>
+            <ChaiLink pathname={pathname} />
             <button
               type="button"
               className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted hover:text-foreground md:hidden"
@@ -371,6 +391,7 @@ export function Shell({
         {menuOpen ? (
           <div className="border-t border-border px-4 py-4 md:hidden">
             <nav className="flex flex-col gap-4 text-sm" aria-label="Mobile">
+              <ChaiLink pathname={pathname} className="w-fit" />
               <PrimaryNav pathname={pathname} latestReport={latestReport} stacked />
               <Link href="/watchlist" className={navClass(pathname.startsWith("/watchlist"))}>
                 Watchlist
@@ -410,6 +431,9 @@ export function Shell({
               </Link>
               <Link className="hover:text-foreground" href="/disclaimer">
                 Disclaimer
+              </Link>
+              <Link className="hover:text-foreground" href="/support">
+                Buy me a chai
               </Link>
               <a
                 className="hover:text-foreground"
