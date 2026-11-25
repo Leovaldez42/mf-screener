@@ -1,11 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatNumber } from "@/lib/format";
 import type { FundDirectoryRow } from "@/lib/directory";
-import { fundsHubPath } from "@/lib/funds-hub";
+import { fundsHubPath, replaceFundsAddress } from "@/lib/funds-hub";
 
 export function FundsIndex({
   funds,
@@ -16,7 +15,6 @@ export function FundsIndex({
   initialQ?: string;
   embedded?: boolean;
 }) {
-  const router = useRouter();
   const [q, setQ] = useState(initialQ);
   const [category, setCategory] = useState("");
   const skipUrl = useRef(true);
@@ -55,8 +53,11 @@ export function FundsIndex({
       skipUrl.current = false;
       return;
     }
-    router.replace(fundsHubPath("all", q.trim() ? { q: q.trim() } : undefined), { scroll: false });
-  }, [embedded, q, router]);
+    const handle = window.setTimeout(() => {
+      replaceFundsAddress(fundsHubPath("all", q.trim() ? { q: q.trim() } : undefined));
+    }, 400);
+    return () => window.clearTimeout(handle);
+  }, [embedded, q]);
 
   return (
     <div className="space-y-6">
@@ -125,13 +126,16 @@ export function FundsIndex({
           <h2 className="text-sm font-medium text-foreground">{house}</h2>
           <ul className="divide-y divide-border rounded-lg border border-border bg-card">
             {rows.map((f) => (
-              <li key={f.id}>
-                <Link href={`/funds/${f.id}`} className="block px-4 py-3 hover:bg-surface">
+              <li key={f.id} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-surface">
+                <Link href={`/schemes/${f.id}`} className="min-w-0">
                   <div className="text-sm font-medium">{f.name}</div>
                   <p className="mt-0.5 text-sm text-muted">
                     {f.category}
                     {f.aum_cr != null ? ` · AUM ₹${formatNumber(f.aum_cr, 0)} cr` : ""}
                   </p>
+                </Link>
+                <Link href={`/funds/${f.id}`} className="shrink-0 text-xs text-muted underline hover:text-foreground">
+                  Holdings
                 </Link>
               </li>
             ))}

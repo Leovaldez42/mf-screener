@@ -94,7 +94,11 @@ export function FundView({
     return (
       <div className="space-y-2">
         <p className="text-sm text-muted">
-          Holdings for this scheme have not been ingested yet.
+          Holdings for this scheme have not been ingested yet.{" "}
+          <Link className="underline hover:text-foreground" href={`/schemes/${fundId}`}>
+            Scheme metrics
+          </Link>{" "}
+          are still available.
         </p>
         <p className="text-sm text-faint">
           Adds & cuts books are only ingested for Direct Growth <strong>active-equity</strong> schemes.
@@ -132,6 +136,9 @@ export function FundView({
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h1 className="text-xl font-medium">{data.family?.name}</h1>
           <div className="flex flex-wrap gap-3 text-sm">
+            <Link className="text-muted underline hover:text-foreground" href={`/schemes/${fundId}`}>
+              Metrics
+            </Link>
             <Link className="text-muted underline hover:text-foreground" href={`/funds?tab=compare&funds=${fundId}`}>
               Compare
             </Link>
