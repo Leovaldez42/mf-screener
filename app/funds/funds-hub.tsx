@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { OverlapView } from "@/app/overlap/overlap-view";
 import type { FundDirectoryRow } from "@/lib/directory";
@@ -36,7 +36,6 @@ export function FundsHub({
   funds: FundDirectoryRow[];
   overlap: OverlapInit;
 }) {
-  const pathname = usePathname();
   const search = useSearchParams();
   const tab = parseFundsTab(search.get("tab") || tabProp);
   const currentQs = pickTabParams(tab, search).toString();
@@ -94,7 +93,7 @@ export function FundsHub({
         </nav>
       </div>
 
-      {tab === "screener" ? <ScreenerTab key={`${pathname}?${screenerSearch}`} initialSearch={screenerSearch} /> : null}
+      {tab === "screener" ? <ScreenerTab initialSearch={screenerSearch} /> : null}
       {tab === "compare" ? <CompareTab /> : null}
       {tab === "overlap" ? (
         <OverlapView

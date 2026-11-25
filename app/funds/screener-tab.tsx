@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LoadError, TableSkeleton, UpdatingNote } from "@/components/load-ui";
 import {
@@ -11,7 +10,7 @@ import {
   parseStyleIds,
   type ClassTabId,
 } from "@/lib/fund-class";
-import { fundsHubPath, parseCsvIds, shortCategoryLabel, shortFundLabel } from "@/lib/funds-hub";
+import { fundsHubPath, parseCsvIds, replaceFundsAddress, shortCategoryLabel, shortFundLabel } from "@/lib/funds-hub";
 import { type CategoryAverage, COMPARE_MAX, SORTABLE, type SchemeMetric, type SortKey } from "@/lib/scheme-metrics";
 import { DataAsOfNote } from "@/components/ui";
 import { formatNumber } from "@/lib/format";
@@ -38,7 +37,6 @@ function isClassTab(value: string): value is ClassTabId {
 }
 
 export function ScreenerTab({ initialSearch }: { initialSearch: string }) {
-  const router = useRouter();
   const start = useMemo(() => new URLSearchParams(initialSearch), [initialSearch]);
   const initialClass = isClassTab(start.get("class") || "") ? (start.get("class") as ClassTabId) : DEFAULT_ASSET_CLASS;
   const [schemes, setSchemes] = useState<SchemeMetric[]>([]);
@@ -88,7 +86,6 @@ export function ScreenerTab({ initialSearch }: { initialSearch: string }) {
   const query = useMemo(() => {
     const p = new URLSearchParams();
     p.set("class", assetClass);
-    if (q) p.set("q", q);
     if (house) p.set("house", house);
     if (styleIds.length) p.set("style", styleIds.join(","));
     if (minSharpe) p.set("minSharpe", minSharpe);
@@ -106,7 +103,6 @@ export function ScreenerTab({ initialSearch }: { initialSearch: string }) {
     return p.toString();
   }, [
     assetClass,
-    q,
     house,
     styleIds,
     minSharpe,
@@ -159,24 +155,27 @@ export function ScreenerTab({ initialSearch }: { initialSearch: string }) {
       skipUrl.current = false;
       return;
     }
-    const p = new URLSearchParams();
-    if (assetClass !== DEFAULT_ASSET_CLASS) p.set("class", assetClass);
-    if (q) p.set("q", q);
-    if (house) p.set("house", house);
-    if (styleIds.length) p.set("style", styleIds.join(","));
-    if (minSharpe) p.set("minSharpe", minSharpe);
-    if (maxExpense) p.set("maxExpense", maxExpense);
-    if (maxPe) p.set("maxPe", maxPe);
-    if (minCagr1y) p.set("minCagr1y", minCagr1y);
-    if (minCagr3y) p.set("minCagr3y", minCagr3y);
-    if (minCagrInception) p.set("minCagrInception", minCagrInception);
-    if (minAum) p.set("minAum", minAum);
-    if (maxAum) p.set("maxAum", maxAum);
-    if (sortKey !== "aum_cr") p.set("sort", sortKey);
-    if (sortOrder !== "desc") p.set("order", sortOrder);
-    if (showAll) p.set("showAll", "1");
-    if (page > 1) p.set("page", String(page));
-    router.replace(fundsHubPath("screener", p), { scroll: false });
+    const handle = window.setTimeout(() => {
+      const p = new URLSearchParams();
+      if (assetClass !== DEFAULT_ASSET_CLASS) p.set("class", assetClass);
+      if (q) p.set("q", q);
+      if (house) p.set("house", house);
+      if (styleIds.length) p.set("style", styleIds.join(","));
+      if (minSharpe) p.set("minSharpe", minSharpe);
+      if (maxExpense) p.set("maxExpense", maxExpense);
+      if (maxPe) p.set("maxPe", maxPe);
+      if (minCagr1y) p.set("minCagr1y", minCagr1y);
+      if (minCagr3y) p.set("minCagr3y", minCagr3y);
+      if (minCagrInception) p.set("minCagrInception", minCagrInception);
+      if (minAum) p.set("minAum", minAum);
+      if (maxAum) p.set("maxAum", maxAum);
+      if (sortKey !== "aum_cr") p.set("sort", sortKey);
+      if (sortOrder !== "desc") p.set("order", sortOrder);
+      if (showAll) p.set("showAll", "1");
+      if (page > 1) p.set("page", String(page));
+      replaceFundsAddress(fundsHubPath("screener", p));
+    }, 400);
+    return () => window.clearTimeout(handle);
   }, [
     assetClass,
     q,
@@ -194,7 +193,6 @@ export function ScreenerTab({ initialSearch }: { initialSearch: string }) {
     sortOrder,
     showAll,
     page,
-    router,
   ]);
 
   function onSort(key: SortKey) {
@@ -219,13 +217,21 @@ export function ScreenerTab({ initialSearch }: { initialSearch: string }) {
   const styleOptions = assetClass === "all" ? [] : styles.length ? styles : [];
   const styleLabel = styleIds.map((id) => styles.find((s) => s.id === id)?.label || id).join(" · ");
   const strip = !searching && styleIds.length && styleAverage ? styleAverage : null;
-  const total = schemes.length;
+  const shown = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return schemes;
+    return schemes.filter(
+      (s) =>
+        s.name.toLowerCase().includes(needle) || (s.fund_house || "").toLowerCase().includes(needle),
+    );
+  }, [schemes, q]);
+  const total = shown.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   if (page > totalPages) setPage(totalPages);
-  const pageRows = schemes.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const pageRows = shown.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const from = total ? (page - 1) * PAGE_SIZE + 1 : 0;
   const to = Math.min(page * PAGE_SIZE, total);
-  const countLabel = universe != null ? Math.max(universe, total) : total;
+  const countLabel = searching ? total : universe != null ? Math.max(universe, total) : total;
   const selectedFunds = selected.join(",");
 
   function onCategoryChange(value: string) {
@@ -363,12 +369,12 @@ export function ScreenerTab({ initialSearch }: { initialSearch: string }) {
             <TableSkeleton columns={TABLE_COLS.map((c) => ({ label: c.label, hide: c.hide }))} rows={8} />
           </div>
         ) : null}
-        {!loading && !error && schemes.length === 0 ? (
+        {!loading && !error && shown.length === 0 ? (
           <p className="px-4 pb-4 text-sm text-faint">
             {searching ? "No schemes match that search." : "No schemes in this slice. Try another category."}
           </p>
         ) : null}
-        {schemes.length > 0 ? (
+        {shown.length > 0 ? (
           <div className="-mx-px overflow-x-auto">
             <table className="w-full min-w-208 text-sm">
               <thead className="text-muted">
@@ -409,7 +415,7 @@ export function ScreenerTab({ initialSearch }: { initialSearch: string }) {
                         />
                       </td>
                       <td className="py-3 pr-3">
-                        <Link className="font-medium hover:underline" href={`/funds/${s.scheme_code}`}>
+                        <Link className="font-medium hover:underline" href={`/schemes/${s.scheme_code}`}>
                           {shortFundLabel(s.name)}
                         </Link>
                         <div className="text-xs text-faint">{s.fund_house}</div>
@@ -431,7 +437,7 @@ export function ScreenerTab({ initialSearch }: { initialSearch: string }) {
             </table>
           </div>
         ) : null}
-        {schemes.length > 0 ? (
+        {shown.length > 0 ? (
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3 text-xs text-muted">
             <p>
               Showing {from}–{to} of {total} funds

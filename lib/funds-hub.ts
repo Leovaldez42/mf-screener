@@ -56,6 +56,14 @@ export function fundsHubPath(tab: FundsTab, params?: URLSearchParams | Record<st
   return qs ? `/funds?${qs}` : "/funds";
 }
 
+/** Update the address without a Next.js navigation. `router.replace` refetches this page. */
+export function replaceFundsAddress(path: string) {
+  if (typeof window === "undefined") return;
+  const current = `${window.location.pathname}${window.location.search}`;
+  if (current === path) return;
+  window.history.replaceState(window.history.state, "", path);
+}
+
 export function pickTabParams(tab: FundsTab, search: URLSearchParams): URLSearchParams {
   const p = new URLSearchParams();
   const keys =
