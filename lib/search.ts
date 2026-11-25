@@ -164,7 +164,7 @@ export function searchCatalogFrom(index: SearchIndex, q: string, limit = LIMIT):
       hit: {
         kind: "fund" as const,
         id: String(f.id),
-        href: `/funds/${f.id}`,
+        href: `/schemes/${f.id}`,
         title: f.name,
         subtitle: [f.house, f.category].filter(Boolean).join(" · "),
       },

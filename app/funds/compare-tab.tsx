@@ -180,7 +180,7 @@ export function CompareTab() {
           <div className="space-y-3 md:hidden">
             {schemes.map((s) => (
               <div key={s.scheme_code} className="rounded-lg border border-border bg-card p-3">
-                <Link className="font-medium hover:underline" href={`/funds/${s.scheme_code}`}>
+                <Link className="font-medium hover:underline" href={`/schemes/${s.scheme_code}`}>
                   {shortFundLabel(s.name)}
                 </Link>
                 <dl className="mt-2 space-y-1 text-sm">
@@ -201,7 +201,7 @@ export function CompareTab() {
                   <th className="sticky left-0 z-10 w-40 bg-background py-2 pr-3 font-normal">Metric</th>
                   {schemes.map((s) => (
                     <th key={s.scheme_code} className="py-2 pr-3 align-bottom font-normal">
-                      <Link className="text-foreground hover:underline" href={`/funds/${s.scheme_code}`}>
+                      <Link className="text-foreground hover:underline" href={`/schemes/${s.scheme_code}`}>
                         {shortFundLabel(s.name)}
                       </Link>
                     </th>
