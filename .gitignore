@@ -35,6 +35,13 @@ yarn-error.log*
 .env*
 !.env.example
 
+# EJI API monthly holdings files. Licensed for this product, not for the repo.
+/holdings-*.jsonl
+/holdings-*.jsonl.gz
+/holdings-*.csv
+/holdings-*.csv.gz
+/data/holdings/
+
 # vercel
 .vercel
 
