@@ -227,9 +227,11 @@ async function main() {
 
   const fundPatch: { family_id: number; month: string; payload: unknown; updated_at: string }[] = [];
   for (const month of siteOnly ? [] : months) {
-    const { data, error } = await db.from("fund_snapshot").select("family_id, payload").eq("month", month);
-    if (error) throw new Error(error.message);
-    for (const row of data || []) {
+    const data = await fetchAllRows<{ family_id: number; payload: object }>(
+      () => db.from("fund_snapshot").select("family_id, payload").eq("month", month).order("family_id"),
+      40,
+    );
+    for (const row of data) {
       const id = Number(row.family_id);
       const availableMonths = [...(familyMonths.get(id) || [])].sort((a, b) => b.localeCompare(a));
       fundPatch.push({

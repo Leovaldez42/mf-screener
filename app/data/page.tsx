@@ -49,7 +49,7 @@ export default async function DataPage() {
       <p className="text-sm text-muted">
         Ingest is a separate process. Metrics (all Direct Growth classes):{" "}
         <code>npm run ingest:metrics</code>. Holdings (active equity only): <code>npm run ingest</code>.
-        The browser never calls FinAPI.
+        The browser never calls EJI API. There is no download of the holdings file.
       </p>
       {error ? <p className="text-sm text-loss">{error}</p> : null}
       <table className="w-full text-left text-sm">
