@@ -445,7 +445,10 @@ export function Shell({
               </a>
             </nav>
           </div>
-          <DataAsOfNote freshness={freshness} />
+          <div className="space-y-0.5">
+            <DataAsOfNote freshness={freshness} />
+            <p className="text-[11px] leading-4 text-faint">Data: EJI API</p>
+          </div>
         </div>
       </footer>
     </div>

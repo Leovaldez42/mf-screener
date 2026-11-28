@@ -16,9 +16,9 @@ Not a broker. Not investment advice.
 
 AMC books land about **ten working days after month-end**. Adds and cuts are **share quantity**, not portfolio weight.
 
-**No login.** Watchlist and compare selection stay in `localStorage`. The browser never calls FinAPI.
+**No login.** Watchlist and compare selection stay in `localStorage`. The browser never calls EJI API.
 
-JSON for the UI is under `/api/v1` (holdings rows: `GET /api/v1/chase`).
+Holdings on the site are credited as “Data: EJI API”. The monthly holdings files stay on the machine that runs ingest. Do not commit them, and do not add a download of every fund’s book. Pages show one fund, one stock, or the month’s adds and cuts.
 
 ## Setup
 

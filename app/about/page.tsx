@@ -64,7 +64,7 @@ export default function AboutPage() {
       <section>
         <h2 className="text-base font-medium text-foreground">Source</h2>
         <p className="mt-2">
-          Holdings and scheme metrics come from FinAPI. Monthly books are ingested for active-equity schemes only.
+          Holdings and scheme metrics come from EJI API. Monthly books are ingested for active-equity schemes only.
           There is no login. Watchlists stay in this browser.
         </p>
       </section>
